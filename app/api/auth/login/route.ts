@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models/User";
 import { createAndStoreRefreshToken } from "@/lib/auth";
-import { DEMO_USER_EMAIL, DEMO_USER_PASSWORD, ensureDemoUserSeeded } from "@/lib/demoUser";
+import { DEMO_USER_EMAIL, DEMO_USER_PASSWORD } from "@/lib/demoUser";
 
 export async function POST(req: NextRequest) {
   try {
@@ -40,7 +40,13 @@ export async function POST(req: NextRequest) {
     let user: any = await User.findOne({ email: email.toLowerCase() });
     if (isDemoLogin) {
       // Auto-ensure demo user exists
-      user = await ensureDemoUserSeeded();
+      user = await User.findOne({ email: DEMO_USER_EMAIL.toLowerCase() });
+      if (!user) {
+        return NextResponse.json(
+          { error: "Demo user not found. Please run the seed script." },
+          { status: 404 }
+        );
+      }
     }
 
     if (!user || !user.passwordHash) {

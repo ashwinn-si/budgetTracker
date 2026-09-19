@@ -243,8 +243,9 @@ export default function ExpensesPage() {
           </Button>
         </GlassCard>
       ) : (
-        <div className="space-y-3">
-          {filteredAndSortedExpenses.map((expense) => {
+        <div className="overflow-y-auto max-h-[calc(100vh-280px)] pr-2 -mr-2 custom-scrollbar">
+          <div className="space-y-3 pb-4">
+            {filteredAndSortedExpenses.map((expense) => {
             const dateFormatted = new Date(expense.date).toLocaleDateString(undefined, {
               weekday: "short",
               month: "short",
@@ -356,6 +357,7 @@ export default function ExpensesPage() {
               </GlassCard>
             );
           })}
+          </div>
         </div>
       )}
 

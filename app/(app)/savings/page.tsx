@@ -288,9 +288,10 @@ export default function SavingsPage() {
       </GlassCard>
 
       {/* Savings Logs / Transactions List */}
-      <div className="space-y-3">
-        {filteredLogs.length === 0 ? (
-          <GlassCard variant="light" className="p-12 text-center space-y-4">
+      <div className="overflow-y-auto max-h-[calc(100vh-380px)] pr-2 -mr-2 custom-scrollbar">
+        <div className="space-y-3 pb-4">
+          {filteredLogs.length === 0 ? (
+            <GlassCard variant="light" className="p-12 text-center space-y-4">
             <div className="w-14 h-14 mx-auto rounded-3xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-inner">
               <PiggyBank className="w-7 h-7" />
             </div>
@@ -462,6 +463,7 @@ export default function SavingsPage() {
             );
           })
         )}
+        </div>
       </div>
 
       {/* Deposit Modal */}

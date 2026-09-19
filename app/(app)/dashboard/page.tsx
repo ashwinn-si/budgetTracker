@@ -552,39 +552,41 @@ function DashboardContent() {
             No expenses recorded for this timeframe. Click "Add Expense" to get started!
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            {categoryBreakdown.map((cat) => (
-              <div key={cat.tagId} className="space-y-1.5">
-                <div className="flex items-center justify-between text-xs sm:text-sm">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className="w-3 h-3 rounded-full shrink-0 shadow-sm"
-                      style={{ backgroundColor: cat.colorKey }}
+          <div className="overflow-y-auto max-h-[calc(100vh-480px)] pr-2 -mr-2 custom-scrollbar">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 pb-4">
+              {categoryBreakdown.map((cat) => (
+                <div key={cat.tagId} className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs sm:text-sm">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                        style={{ backgroundColor: cat.colorKey }}
+                      />
+                      <span className="font-medium text-[var(--text-primary)]">{cat.name}</span>
+                      <span className="text-[11px] text-[var(--text-muted)]">({cat.count})</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-[var(--text-primary)]">
+                        {formatAmount(cat.total)}
+                      </span>
+                      <span className="text-xs text-[var(--text-muted)] w-10 text-right">
+                        {cat.percentage}%
+                      </span>
+                    </div>
+                  </div>
+                  {/* Visual Progress Bar */}
+                  <div className="w-full h-2 rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700 ease-out"
+                      style={{
+                        width: `${cat.percentage}%`,
+                        backgroundColor: cat.colorKey,
+                      }}
                     />
-                    <span className="font-medium text-[var(--text-primary)]">{cat.name}</span>
-                    <span className="text-[11px] text-[var(--text-muted)]">({cat.count})</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-[var(--text-primary)]">
-                      {formatAmount(cat.total)}
-                    </span>
-                    <span className="text-xs text-[var(--text-muted)] w-10 text-right">
-                      {cat.percentage}%
-                    </span>
                   </div>
                 </div>
-                {/* Visual Progress Bar */}
-                <div className="w-full h-2 rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-700 ease-out"
-                    style={{
-                      width: `${cat.percentage}%`,
-                      backgroundColor: cat.colorKey,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
       </GlassCard>

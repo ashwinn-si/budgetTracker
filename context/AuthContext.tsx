@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { clearLocalUserData, seedDemoExpensesForUser, db } from "@/lib/offline/db";
+import { clearLocalUserData, db } from "@/lib/offline/db";
 import { pullFromServer } from "@/lib/offline/syncQueue";
 
 export interface AuthUser {
@@ -40,14 +40,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.setItem("budget_active_user_id", newUser.id);
     localStorage.setItem("budget_local_user", JSON.stringify(newUser));
-
-    // If demo user (user@gmail.com), ensure demo expenses exist in local Dexie
-    if (newUser.email.toLowerCase() === "user@gmail.com") {
-      const expCount = await db.expenses.count();
-      if (expCount === 0) {
-        await seedDemoExpensesForUser(newUser.id);
-      }
-    }
 
     // Pull real user transactions from server
     await pullFromServer();

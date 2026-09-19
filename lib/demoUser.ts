@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { User, IUser } from "@/models/User";
 import { Tag } from "@/models/Tag";
 import { Expense } from "@/models/Expense";
+import { Saving } from "@/models/Saving";
 
 export const DEMO_USER_EMAIL = "user@gmail.com";
 export const DEMO_USER_PASSWORD = "root";
@@ -57,74 +58,77 @@ export async function ensureDemoUserSeeded(): Promise<any> {
     tagMap[def.name] = tag._id as mongoose.Types.ObjectId;
   }
 
-  // Ensure the 6 demo sample expenses exist for this user alone
+  // Clear existing demo data to ensure a fresh seed
+  await Expense.deleteMany({ userId });
+  await Saving.deleteMany({ userId });
+
   const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-
-  const demoExpenses = [
-    {
-      clientId: "demo-exp-1",
+  
+  // Seed ~150 expenses over the last 90 days
+  const tagsKeys = Object.keys(tagMap);
+  const demoExpenses = [];
+  const demoSavings = [];
+  
+  for (let i = 1; i <= 150; i++) {
+    const daysAgo = Math.floor(Math.random() * 90);
+    const date = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    const tagKey = tagsKeys[Math.floor(Math.random() * tagsKeys.length)];
+    const tagId = tagMap[tagKey];
+    
+    // Vary the amount based on tag
+    let amount = 0;
+    if (tagKey === "Groceries") amount = 20 + Math.random() * 80;
+    if (tagKey === "Dining & Coffee") amount = 5 + Math.random() * 30;
+    if (tagKey === "Housing & Bills") amount = 50 + Math.random() * 150;
+    if (tagKey === "Health & Gym") amount = 15 + Math.random() * 60;
+    if (tagKey === "Transport") amount = 10 + Math.random() * 40;
+    if (tagKey === "Entertainment") amount = 20 + Math.random() * 70;
+    
+    // 20% chance it was paid from Savings
+    const isFromSavings = Math.random() < 0.2;
+    const expenseClientId = `demo-exp-${i}`;
+    
+    demoExpenses.push({
+      clientId: expenseClientId,
       userId,
-      amount: 84.5,
-      note: "Organic Market groceries & produce",
-      tagIds: [tagMap["Groceries"]].filter(Boolean),
-      date: new Date(currentYear, currentMonth, Math.max(1, now.getDate() - 1)),
+      amount: Number(amount.toFixed(2)),
+      note: `Random ${tagKey} expense`,
+      tagIds: [tagId].filter(Boolean),
+      date,
       syncStatus: "synced" as const,
-    },
-    {
-      clientId: "demo-exp-2",
-      userId,
-      amount: 14.2,
-      note: "Espresso & matcha at artisan roastery",
-      tagIds: [tagMap["Dining & Coffee"]].filter(Boolean),
-      date: new Date(currentYear, currentMonth, now.getDate()),
-      syncStatus: "synced" as const,
-    },
-    {
-      clientId: "demo-exp-3",
-      userId,
-      amount: 145.0,
-      note: "Electricity & gigabit fiber broadband",
-      tagIds: [tagMap["Housing & Bills"]].filter(Boolean),
-      date: new Date(currentYear, currentMonth, 3),
-      syncStatus: "synced" as const,
-    },
-    {
-      clientId: "demo-exp-4",
-      userId,
-      amount: 65.0,
-      note: "Monthly bouldering & fitness pass",
-      tagIds: [tagMap["Health & Gym"]].filter(Boolean),
-      date: new Date(currentYear, currentMonth, 5),
-      syncStatus: "synced" as const,
-    },
-    {
-      clientId: "demo-exp-5",
-      userId,
-      amount: 32.0,
-      note: "Metro transit card reload",
-      tagIds: [tagMap["Transport"]].filter(Boolean),
-      date: new Date(currentYear, currentMonth, 8),
-      syncStatus: "synced" as const,
-    },
-    {
-      clientId: "demo-exp-6",
-      userId,
-      amount: 18.99,
-      note: "Streaming subscription",
-      tagIds: [tagMap["Entertainment"]].filter(Boolean),
-      date: new Date(currentYear, currentMonth, 10),
-      syncStatus: "synced" as const,
-    },
-  ];
-
-  for (const exp of demoExpenses) {
-    const existing = await Expense.findOne({ clientId: exp.clientId, userId });
-    if (!existing) {
-      await Expense.create(exp);
+    });
+    
+    if (isFromSavings) {
+      demoSavings.push({
+        clientId: `demo-sav-wd-${i}`,
+        userId,
+        amount: Number(amount.toFixed(2)),
+        type: "withdrawal",
+        note: `Withdrawal for ${tagKey} expense`,
+        date,
+        linkedExpenseId: expenseClientId,
+        syncStatus: "synced" as const,
+      });
     }
   }
+  
+  // Seed a few large deposits
+  for (let i = 1; i <= 10; i++) {
+    const daysAgo = Math.floor(Math.random() * 90);
+    const date = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    demoSavings.push({
+      clientId: `demo-sav-dep-${i}`,
+      userId,
+      amount: Number((100 + Math.random() * 400).toFixed(2)),
+      type: "deposit",
+      note: "Salary / Bonus allocation",
+      date,
+      syncStatus: "synced" as const,
+    });
+  }
+
+  await Expense.insertMany(demoExpenses);
+  await Saving.insertMany(demoSavings);
 
   return user;
 }
