@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -53,10 +54,10 @@ export function Modal({
     xl: "sm:max-w-xl",
   };
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 overflow-hidden">
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 overflow-hidden">
           {/* Backdrop with Motion Fade & Blur */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -130,4 +131,10 @@ export function Modal({
       )}
     </AnimatePresence>
   );
+
+  // Render into a portal at document.body so no parent overflow/transform
+  // context can clip or interfere with the fixed positioning
+  if (typeof document === "undefined") return null;
+  return createPortal(modalContent, document.body);
 }
+
