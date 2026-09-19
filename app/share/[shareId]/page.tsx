@@ -130,9 +130,7 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
         </div>
         
         <PageHeader 
-          eyebrow="Public Dashboard"
           title={<>{data.userName}&apos;s <em>Finances</em></>}
-          icon={<Share2 className="w-5 h-5" />}
         />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

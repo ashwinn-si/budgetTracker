@@ -4,7 +4,7 @@ import React from "react";
 
 interface PageHeaderProps {
   /** Small uppercase eyebrow label above the title */
-  eyebrow: string;
+  eyebrow?: string;
   /** Main title — can include <em> for the italic accent word */
   title: React.ReactNode;
   /** Optional right-side action buttons */
@@ -48,14 +48,16 @@ export function PageHeader({ eyebrow, title, actions, icon }: PageHeaderProps) {
 
           <div className="min-w-0">
             {/* Eyebrow */}
-            <div className="flex items-center gap-2 mb-1">
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/15 px-2.5 py-1 rounded-full border border-emerald-500/20 dark:border-emerald-400/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
-                {eyebrow}
-              </span>
-            </div>
-
-            {/* Title */}
+            {eyebrow && (
+              <div className="flex items-center gap-2 mb-1">
+                <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/15 px-2.5 py-1 rounded-full border border-emerald-500/20 dark:border-emerald-400/20">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
+                  {eyebrow}
+                </span>
+              </div>
+            )}
+            
+            {/* Main Title */}
             <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight leading-tight truncate">
               {title}
             </h1>
