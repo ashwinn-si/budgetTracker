@@ -7,7 +7,6 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { PieChart, TrendingDown, TrendingUp, AlertCircle, Share2, Moon, Sun, ChevronLeft, ChevronRight } from "lucide-react";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { useTheme } from "@/context/ThemeContext";
-import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 interface CategoryBreakdown {
   tagId: string;
