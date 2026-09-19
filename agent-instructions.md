@@ -18,7 +18,8 @@ A personal budget tracking web app built with Next.js (App Router), MongoDB, and
 - Glass elements must have top-edge highlight: `inset 0 1px 0 rgba(255,255,255,0.6)`.
 - **Colors**: Do not use `#000` or `#fff` for text. Use warm near-blacks (e.g. `#16281A`). The only vivid color is the green accent (`#22C55E`).
 - **Typography**: Display/Headings use a warm editorial serif. UI uses clean geometric sans.
-- **Animations**: Only use instant states, or specific on-load SVG drawing / hover translations. No drifting background orbs.
+- **Components**: Do not use native `alert()` or standard `<select>` tags on mobile. Use `react-hot-toast` for notifications and bottom sliding sheets (like `SelectSheet.tsx`) for dropdowns.
+- **Animations**: Only use instant states, or specific on-load SVG drawing / hover translations. Modals use `motion/react` spring physics (damping: 30, stiffness: 320).
 - Read `glassmorphism.md` for specific CSS values and aesthetic rules.
 
 ## 4. Architectural Rules

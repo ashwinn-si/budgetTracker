@@ -7,8 +7,9 @@ A personal budget tracking web app built with Next.js, MongoDB, and Vercel.
 - **Offline-First Sync**: Enter expenses completely offline; background sync to MongoDB when reconnected.
 - **Detailed Analytics**: Dashboard with spend analytics, filterable by date and tags.
 - **Authentication**: Google OAuth and Email/Password with silent auto-login.
+- **Public Dashboard Sharing**: Generate a secure, public link to share read-only monthly spending and savings balances with parents or dependents.
 - **Exports**: Export data to Excel or sync directly to your personal Google Sheets.
-- **Glassmorphism UI**: Beautiful light-green glassmorphism aesthetic with full light/dark mode support.
+- **Modern UI Patterns**: Mobile-optimized bottom sheets for filters, global toast notifications via `react-hot-toast`, and a sleek light-green glassmorphism aesthetic with full light/dark mode support.
 
 ## Tech Stack
 - **Frontend**: Next.js (App Router), React, Tailwind CSS, Recharts
