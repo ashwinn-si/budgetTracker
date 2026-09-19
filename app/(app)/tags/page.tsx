@@ -18,6 +18,8 @@ import {
   ArrowRight,
   X,
 } from "lucide-react";
+import { Modal } from "@/components/ui/Modal";
+import { Button } from "@/components/ui/Button";
 
 const PRESET_COLORS = [
   "#22C55E", // Emerald
@@ -78,8 +80,8 @@ export default function TagsPage() {
     return max > 0 ? top : null;
   }, [allTags, tagStats]);
 
-  const handleCreateTag = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateTag = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const trimmed = newTagName.trim();
     if (!trimmed) {
       setError("Please enter a category name.");
@@ -144,22 +146,19 @@ export default function TagsPage() {
           </p>
         </div>
 
-        <button
-          onClick={() => setIsCreating((prev) => !prev)}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold shadow-lg shadow-emerald-500/30 active:scale-95 transition-all cursor-pointer shrink-0"
+        <Button
+          variant="primary"
+          onClick={() => {
+            setNewTagName("");
+            setError(null);
+            setSelectedColor(PRESET_COLORS[0]);
+            setIsCreating(true);
+          }}
+          icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+          className="shadow-emerald-500/20 shadow-lg shrink-0"
         >
-          {isCreating ? (
-            <>
-              <X className="w-4 h-4" />
-              <span>Cancel</span>
-            </>
-          ) : (
-            <>
-              <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Add Category</span>
-            </>
-          )}
-        </button>
+          Add Category
+        </Button>
       </div>
 
       {/* Stats Row */}
@@ -210,105 +209,107 @@ export default function TagsPage() {
         </div>
       </div>
 
-      {/* Inline Create Form Card */}
-      {isCreating && (
-        <form
-          onSubmit={handleCreateTag}
-          className="p-6 rounded-3xl glass-strong border border-emerald-500/30 dark:border-emerald-500/20 shadow-xl space-y-4 animate-in fade-in slide-in-from-top-3 duration-200"
-        >
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-heading font-semibold text-[var(--text-primary)] flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-emerald-500" />
-              New Category Tag
-            </h2>
-            <button
-              type="button"
-              onClick={() => setIsCreating(false)}
-              className="text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-medium text-[var(--text-muted)] mb-1.5">
-                Category Name
-              </label>
-              <input
-                type="text"
-                value={newTagName}
-                onChange={(e) => {
-                  setNewTagName(e.target.value);
-                  setError(null);
-                }}
-                placeholder="e.g., Subscriptions, Pet Care, Travel..."
-                autoFocus
-                className="w-full px-4 py-3 rounded-2xl glass-input border border-white/60 dark:border-white/10 focus:border-emerald-500 outline-none text-sm text-[var(--text-primary)] transition-all"
-              />
-              {error && <p className="text-xs text-rose-500 mt-1.5">{error}</p>}
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-[var(--text-muted)] mb-2">
-                Pick Accent Color
-              </label>
-              <div className="flex flex-wrap gap-2.5">
-                {PRESET_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    onClick={() => setSelectedColor(color)}
-                    style={{ backgroundColor: color }}
-                    className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
-                      selectedColor === color
-                        ? "ring-3 ring-offset-2 ring-emerald-500 scale-110 shadow-md"
-                        : "opacity-80 hover:opacity-100 hover:scale-105"
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Live Preview */}
-            <div className="pt-2 flex items-center gap-2">
-              <span className="text-xs text-[var(--text-muted)] font-medium">
-                Preview Badge:
-              </span>
-              <span
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-xs"
-                style={{
-                  backgroundColor: `${selectedColor}20`,
-                  color: selectedColor,
-                  border: `1px solid ${selectedColor}40`,
-                }}
-              >
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: selectedColor }}
-                />
-                {newTagName.trim() || "Category Name"}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => setIsCreating(false)}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-[var(--text-secondary)] hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+      {/* Category Tag Create Modal / Drawer */}
+      <Modal
+        isOpen={isCreating}
+        onClose={() => {
+          setIsCreating(false);
+          setError(null);
+        }}
+        title="New Category Tag"
+        subtitle="Create a category tag to organize and analyze your spending."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsCreating(false);
+                setError(null);
+              }}
+              fullWidth
+              className="sm:w-auto px-5 bg-white/70 dark:bg-white/10 border-black/10 dark:border-white/10 shadow-xs"
             >
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="px-5 py-2 rounded-xl text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white shadow-md shadow-emerald-500/25 transition-all cursor-pointer"
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => handleCreateTag()}
+              fullWidth
+              className="sm:w-auto px-6 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/30"
             >
               Save Category
-            </button>
+            </Button>
+          </>
+        }
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleCreateTag();
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+              Category Name
+            </label>
+            <input
+              type="text"
+              value={newTagName}
+              onChange={(e) => {
+                setNewTagName(e.target.value);
+                setError(null);
+              }}
+              placeholder="e.g., Subscriptions, Pet Care, Travel..."
+              autoFocus
+              className="w-full px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
+            />
+            {error && <p className="text-xs text-rose-500 mt-1.5">{error}</p>}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
+              Pick Accent Color
+            </label>
+            <div className="flex flex-wrap gap-2.5">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setSelectedColor(color)}
+                  style={{ backgroundColor: color }}
+                  className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
+                    selectedColor === color
+                      ? "ring-3 ring-offset-2 ring-emerald-500 scale-110 shadow-md"
+                      : "opacity-80 hover:opacity-100 hover:scale-105"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Live Preview */}
+          <div className="pt-2 flex items-center gap-2">
+            <span className="text-xs text-[var(--text-muted)] font-medium">
+              Preview Badge:
+            </span>
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-xs"
+              style={{
+                backgroundColor: `${selectedColor}20`,
+                color: selectedColor,
+                border: `1px solid ${selectedColor}40`,
+              }}
+            >
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: selectedColor }}
+              />
+              {newTagName.trim() || "Category Name"}
+            </span>
           </div>
         </form>
-      )}
+      </Modal>
 
       {/* Grid of Categories */}
       {allTags.length === 0 ? (
