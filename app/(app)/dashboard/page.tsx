@@ -65,6 +65,16 @@ function DashboardContent() {
       return { start, end, prevStart, prevEnd };
     }
 
+    if (periodParam === "week") {
+      const day = now.getDay();
+      const diffToMonday = (day === 0 ? -6 : 1) - day;
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday, 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday + 6, 23, 59, 59, 999);
+      const prevStart = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 7, 0, 0, 0, 0);
+      const prevEnd = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1, 23, 59, 59, 999);
+      return { start, end, prevStart, prevEnd };
+    }
+
     if (periodParam === "last30") {
       const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const prevStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);

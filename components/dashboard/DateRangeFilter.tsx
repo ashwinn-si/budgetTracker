@@ -6,7 +6,7 @@ import { Calendar as CalendarIcon, ChevronDown, Check } from "lucide-react";
 import { DayPicker, DateRange } from "react-day-picker";
 import "react-day-picker/style.css";
 
-export type PeriodPreset = "month" | "last30" | "ytd" | "custom";
+export type PeriodPreset = "week" | "month" | "last30" | "ytd" | "custom";
 
 interface DateRangeFilterProps {
   period: PeriodPreset;
@@ -44,6 +44,7 @@ export function DateRangeFilter({
   }, [isOpen]);
 
   const presets: { key: PeriodPreset; label: string }[] = [
+    { key: "week", label: "This Week" },
     { key: "month", label: "This Month" },
     { key: "last30", label: "Last 30 Days" },
     { key: "ytd", label: "Year to Date" },
