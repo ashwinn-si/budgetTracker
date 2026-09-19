@@ -24,7 +24,7 @@ export async function PATCH(request: Request) {
     await connectToDatabase();
 
     // Fetch current user from DB
-    const dbUser = await User.findById(user.id);
+    const dbUser = await User.findById(user.userId);
     if (!dbUser) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
