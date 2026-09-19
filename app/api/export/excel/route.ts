@@ -3,6 +3,7 @@ import ExcelJS from "exceljs";
 import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
 import { Tag } from "@/models/Tag";
+import { Saving } from "@/models/Saving";
 import { User } from "@/models/User";
 import { getCurrentUser } from "@/lib/auth";
 import { getExcelCurrencyFormat } from "@/lib/currency";
@@ -102,10 +103,28 @@ export async function GET(req: NextRequest) {
           note: exp.note || "No note",
           tags: tags.length > 0 ? tags : ["Uncategorized"],
           amount: typeof exp.amount === "number" ? exp.amount : parseFloat(exp.amount) || 0,
-          isSaving: (exp as any).isSaving || false,
-          fromSavings: (exp as any).fromSavings || false,
         };
       });
+
+      const savingFilter: any = { userId };
+      if (filter.date) {
+        savingFilter.date = filter.date;
+      }
+      const savings = await Saving.find(savingFilter).sort({ date: 1 }).lean();
+      
+      const savingsData = savings.map((sav) => {
+        return {
+          date: new Date(sav.date),
+          note: sav.note || "No note",
+          tags: [], // Savings don't have tags natively in the new schema
+          amount: typeof sav.amount === "number" ? sav.amount : parseFloat(sav.amount as any) || 0,
+          isSaving: sav.type === "deposit",
+          fromSavings: sav.type === "withdrawal",
+        };
+      });
+
+      // Combine and sort oldest first
+      expensesData = [...expensesData, ...savingsData].sort((a, b) => a.date.getTime() - b.date.getTime());
 
       // If specific tagIds were requested and tagNames weren't provided in query, fetch tag names
       if (tagIdsParam && tagIdsParam.length > 0 && resolvedTagNames.length === 0) {

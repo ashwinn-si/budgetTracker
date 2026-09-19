@@ -45,6 +45,7 @@ function DashboardContent() {
 
   // Live query from Dexie IndexedDB
   const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
   const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
 
   const tagMap = useMemo(() => {
@@ -149,14 +150,14 @@ function DashboardContent() {
   // Savings balance — all-time, ignores period filter
   // Positive = amount saved; Negative = spent more from savings than saved
   const savingsBalance = useMemo(() => {
-    const totalSaved = allExpenses
-      .filter((e) => e.isSaving)
+    const totalSaved = allSavings
+      .filter((e) => e.type === "deposit")
       .reduce((sum, e) => sum + e.amount, 0);
-    const totalFromSavings = allExpenses
-      .filter((e) => e.fromSavings)
+    const totalFromSavings = allSavings
+      .filter((e) => e.type === "withdrawal")
       .reduce((sum, e) => sum + e.amount, 0);
     return { totalSaved, totalFromSavings, balance: totalSaved - totalFromSavings };
-  }, [allExpenses]);
+  }, [allSavings]);
 
   // Tag Breakdown
   const categoryBreakdown = useMemo(() => {

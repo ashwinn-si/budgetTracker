@@ -19,17 +19,27 @@ export interface LocalExpense {
   createdAt: string;
   updatedAt: string;
   syncStatus: "synced" | "pending" | "conflict";
-  /** True when this entry adds money to the savings balance */
-  isSaving?: boolean;
-  /** True when this expense was paid out of the savings balance */
-  fromSavings?: boolean;
+}
+
+export interface LocalSaving {
+  _id?: string;
+  clientId: string;
+  userId: string;
+  amount: number;
+  type: "deposit" | "withdrawal";
+  note: string;
+  date: string;
+  createdAt: string;
+  updatedAt: string;
+  syncStatus: "synced" | "pending" | "conflict";
+  linkedExpenseId?: string;
 }
 
 export interface SyncQueueItem {
   id?: number;
   clientId: string;
   action: "create" | "update" | "delete";
-  entity: "expense" | "tag";
+  entity: "expense" | "tag" | "saving";
   payload: Record<string, unknown>;
   createdAt: number;
 }
@@ -37,6 +47,7 @@ export interface SyncQueueItem {
 export class BudgetDatabase extends Dexie {
   expenses!: Table<LocalExpense, string>;
   tags!: Table<LocalTag, string>;
+  savings!: Table<LocalSaving, string>;
   syncQueue!: Table<SyncQueueItem, number>;
 
   constructor() {
@@ -48,8 +59,15 @@ export class BudgetDatabase extends Dexie {
     });
     // v2: adds isSaving and fromSavings boolean columns
     this.version(2).stores({
-      expenses: "clientId, _id, userId, date, syncStatus, *tagIds, isSaving, fromSavings",
+      expenses: "clientId, _id, userId, date, syncStatus, *tagIds",
       tags: "_id, userId, name",
+      syncQueue: "++id, clientId, entity, action, createdAt",
+    });
+    // v3: removes isSaving and fromSavings, adds savings table
+    this.version(3).stores({
+      expenses: "clientId, _id, userId, date, syncStatus, *tagIds",
+      tags: "_id, userId, name",
+      savings: "clientId, _id, userId, date, syncStatus, linkedExpenseId",
       syncQueue: "++id, clientId, entity, action, createdAt",
     });
   }
@@ -84,6 +102,7 @@ export async function clearLocalUserData() {
   if (typeof window === "undefined") return;
   try {
     await db.expenses.clear();
+    await db.savings.clear();
     await db.syncQueue.clear();
   } catch (err) {
     console.error("Failed to clear local user data:", err);

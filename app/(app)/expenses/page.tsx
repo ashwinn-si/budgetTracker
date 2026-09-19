@@ -22,7 +22,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
-import { queueExpenseDeletion } from "@/lib/offline/syncQueue";
+import { queueExpenseDeletion, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
 
 export default function ExpensesPage() {
@@ -51,11 +51,20 @@ export default function ExpensesPage() {
 
   // Live query from Dexie
   const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
   const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
 
   const tagMap = useMemo(() => {
     return new Map(allTags.map((t) => [t._id, t]));
   }, [allTags]);
+
+  const linkedWithdrawalIds = useMemo(() => {
+    const ids = new Set<string>();
+    allSavings.forEach((s) => {
+      if (s.linkedExpenseId) ids.add(s.linkedExpenseId);
+    });
+    return ids;
+  }, [allSavings]);
 
   // Compute available months dynamically from expenses and recent months
   const availableMonths = useMemo(() => {
@@ -96,9 +105,6 @@ export default function ExpensesPage() {
   const filteredAndSortedExpenses = useMemo(() => {
     return allExpenses
       .filter((exp) => {
-        // Exclude pure savings deposits from the expense ledger
-        if (exp.isSaving) return false;
-
         const matchesSearch =
           !searchTerm ||
           exp.note.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -125,6 +131,10 @@ export default function ExpensesPage() {
   const handleDelete = async (clientId: string) => {
     if (confirm("Are you sure you want to delete this expense?")) {
       await queueExpenseDeletion(clientId);
+      const saving = await db.savings.where("linkedExpenseId").equals(clientId).first();
+      if (saving) {
+        await queueSavingDeletion(saving.clientId);
+      }
     }
   };
 
@@ -242,6 +252,8 @@ export default function ExpensesPage() {
               year: "numeric",
             });
 
+            const isFromSavings = linkedWithdrawalIds.has(expense.clientId);
+
             return (
               <GlassCard
                 key={expense.clientId}
@@ -252,15 +264,11 @@ export default function ExpensesPage() {
                 <div className="flex items-start gap-3.5 min-w-0">
                 {/* Icon — savings-aware */}
                 <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                  expense.isSaving
-                    ? "bg-teal-500/10 text-teal-600 dark:text-teal-400"
-                    : expense.fromSavings
+                  isFromSavings
                     ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
                     : "bg-black/5 dark:bg-white/5 text-emerald-600 dark:text-emerald-400 font-serif-display text-base font-semibold"
                 }`}>
-                  {expense.isSaving ? (
-                    <PiggyBank className="w-5 h-5" />
-                  ) : expense.fromSavings ? (
+                  {isFromSavings ? (
                     <ArrowDownLeft className="w-5 h-5" />
                   ) : (
                     currencyInfo.symbol
@@ -271,13 +279,7 @@ export default function ExpensesPage() {
                       <h4 className="font-semibold text-sm sm:text-base text-[var(--text-primary)] truncate">
                         {expense.note || "No description"}
                       </h4>
-                      {/* Savings badge */}
-                      {expense.isSaving && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20">
-                          <PiggyBank className="w-2.5 h-2.5" /> Saving
-                        </span>
-                      )}
-                      {expense.fromSavings && (
+                      {isFromSavings && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
                           <ArrowDownLeft className="w-2.5 h-2.5" /> From Savings
                         </span>

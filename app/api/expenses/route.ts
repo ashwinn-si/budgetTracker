@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     const user = await getCurrentUser(req);
     const userId = user?.userId || "local_user";
 
-    const { amount, note, tagIds, date, clientId, isSaving, fromSavings } = await req.json();
+    const { amount, note, tagIds, date, clientId } = await req.json();
 
     if (amount === undefined || isNaN(Number(amount))) {
       return NextResponse.json({ error: "Valid amount is required" }, { status: 400 });
@@ -72,8 +72,6 @@ export async function POST(req: NextRequest) {
           date: date ? new Date(date).toISOString() : new Date().toISOString(),
           clientId: clientId || `client_${Date.now()}`,
           syncStatus: "synced",
-          isSaving: Boolean(isSaving),
-          fromSavings: Boolean(fromSavings),
         },
       });
     }
@@ -86,8 +84,6 @@ export async function POST(req: NextRequest) {
       date: date ? new Date(date) : new Date(),
       clientId,
       syncStatus: "synced",
-      isSaving: Boolean(isSaving),
-      fromSavings: Boolean(fromSavings),
     });
 
     return NextResponse.json({ expense });
@@ -102,7 +98,7 @@ export async function PUT(req: NextRequest) {
     const user = await getCurrentUser(req);
     const userId = user?.userId || "local_user";
 
-    const { id, clientId, amount, note, tagIds, date, isSaving, fromSavings } = await req.json();
+    const { id, clientId, amount, note, tagIds, date } = await req.json();
 
     const db = await connectToDatabase();
     if (!db) {
@@ -120,8 +116,6 @@ export async function PUT(req: NextRequest) {
     if (note !== undefined) expense.note = note.trim();
     if (tagIds !== undefined) expense.tagIds = tagIds;
     if (date !== undefined) expense.date = new Date(date);
-    if (isSaving !== undefined) expense.isSaving = Boolean(isSaving);
-    if (fromSavings !== undefined) expense.fromSavings = Boolean(fromSavings);
 
     await expense.save();
     return NextResponse.json({ expense });

@@ -17,8 +17,8 @@ import {
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { db, LocalExpense, LocalTag } from "@/lib/offline/db";
-import { queueExpenseCreation, queueExpenseUpdate, queueTagCreation } from "@/lib/offline/syncQueue";
+import { db, LocalExpense, LocalTag, LocalSaving } from "@/lib/offline/db";
+import { queueExpenseCreation, queueExpenseUpdate, queueTagCreation, queueSavingCreation, queueSavingUpdate, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { formatAmountInput, parseAmountInput } from "@/lib/currency";
@@ -61,8 +61,8 @@ export function ExpenseFormModal({
   // Search or quick-create category query
   const [tagSearchQuery, setTagSearchQuery] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [isSaving, setIsSaving] = useState<boolean>(false);
   const [fromSavings, setFromSavings] = useState<boolean>(false);
+  const [linkedSaving, setLinkedSaving] = useState<LocalSaving | null>(null);
 
   // Live tags from Dexie — deduplicated by lowercase name to avoid server+local duplicates
   const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
@@ -77,12 +77,12 @@ export function ExpenseFormModal({
   }, [rawTags]);
 
   // Live savings balance (all-time) to display inside the modal
-  const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
   const savingsBalance = useMemo(() => {
-    const saved = allExpenses.filter((e) => e.isSaving).reduce((s, e) => s + e.amount, 0);
-    const withdrawn = allExpenses.filter((e) => e.fromSavings).reduce((s, e) => s + e.amount, 0);
+    const saved = allSavings.filter((s) => s.type === "deposit").reduce((sum, s) => sum + s.amount, 0);
+    const withdrawn = allSavings.filter((s) => s.type === "withdrawal").reduce((sum, s) => sum + s.amount, 0);
     return saved - withdrawn;
-  }, [allExpenses]);
+  }, [allSavings]);
 
   const amountInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -92,13 +92,23 @@ export function ExpenseFormModal({
       setNote(initialExpense.note || "");
       setDate(initialExpense.date ? initialExpense.date.split("T")[0] : new Date().toISOString().split("T")[0]);
       setSelectedTagIds(initialExpense.tagIds || []);
+      
+      db.savings.where("linkedExpenseId").equals(initialExpense.clientId).first().then(saving => {
+        if (saving && saving.type === "withdrawal") {
+          setFromSavings(true);
+          setLinkedSaving(saving);
+        } else {
+          setFromSavings(false);
+          setLinkedSaving(null);
+        }
+      }).catch(err => console.error("Error loading linked saving:", err));
     } else {
       setAmount("");
       setNote("");
       setDate(new Date().toISOString().split("T")[0]);
       setSelectedTagIds([]);
-      setIsSaving(false);
       setFromSavings(false);
+      setLinkedSaving(null);
     }
     setTagSearchQuery("");
   }, [initialExpense, isOpen, currencyInfo.locale]);
@@ -161,13 +171,7 @@ export function ExpenseFormModal({
     }
   };
 
-  // When editing, pre-fill saving flags
-  useEffect(() => {
-    if (initialExpense) {
-      setIsSaving(!!initialExpense.isSaving);
-      setFromSavings(!!initialExpense.fromSavings);
-    }
-  }, [initialExpense]);
+  // Removed old useEffect for isSaving and fromSavings
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) =>
@@ -239,10 +243,37 @@ export function ExpenseFormModal({
           date,
           updatedAt: now,
           syncStatus: "pending",
-          isSaving: isSaving || undefined,
-          fromSavings: fromSavings || undefined,
         };
         await queueExpenseUpdate(updatedExpense);
+
+        if (fromSavings) {
+          if (linkedSaving) {
+            await queueSavingUpdate({
+              ...linkedSaving,
+              amount: parsedAmount,
+              note: note.trim() ? `Paid from savings: ${note.trim()}` : "Paid from savings",
+              date,
+              updatedAt: now,
+              syncStatus: "pending",
+            });
+          } else {
+            const newSaving: LocalSaving = {
+              clientId: `sav_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+              userId,
+              amount: parsedAmount,
+              type: "withdrawal",
+              note: note.trim() ? `Paid from savings: ${note.trim()}` : "Paid from savings",
+              date,
+              createdAt: now,
+              updatedAt: now,
+              syncStatus: "pending",
+              linkedExpenseId: updatedExpense.clientId,
+            };
+            await queueSavingCreation(newSaving);
+          }
+        } else if (linkedSaving) {
+          await queueSavingDeletion(linkedSaving.clientId);
+        }
       } else {
         const newExpense: LocalExpense = {
           clientId: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
@@ -254,9 +285,24 @@ export function ExpenseFormModal({
           createdAt: now,
           updatedAt: now,
           syncStatus: "pending",
-          fromSavings: fromSavings || undefined,
         };
         await queueExpenseCreation(newExpense);
+
+        if (fromSavings) {
+          const newSaving: LocalSaving = {
+            clientId: `sav_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+            userId,
+            amount: parsedAmount,
+            type: "withdrawal",
+            note: note.trim() ? `Paid from savings: ${note.trim()}` : "Paid from savings",
+            date,
+            createdAt: now,
+            updatedAt: now,
+            syncStatus: "pending",
+            linkedExpenseId: newExpense.clientId,
+          };
+          await queueSavingCreation(newSaving);
+        }
       }
 
       onSaved?.();

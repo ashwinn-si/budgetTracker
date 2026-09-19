@@ -1,4 +1,4 @@
-import { db, LocalExpense, LocalTag, SyncQueueItem } from "./db";
+import { db, LocalExpense, LocalTag, LocalSaving, SyncQueueItem } from "./db";
 
 export async function queueExpenseCreation(expense: LocalExpense) {
   await db.expenses.put(expense);
@@ -29,6 +29,40 @@ export async function queueExpenseDeletion(clientId: string) {
     clientId,
     action: "delete",
     entity: "expense",
+    payload: { clientId },
+    createdAt: Date.now(),
+  });
+}
+
+export async function queueSavingCreation(saving: LocalSaving) {
+  await db.savings.put(saving);
+  await db.syncQueue.add({
+    clientId: saving.clientId,
+    action: "create",
+    entity: "saving",
+    payload: { ...saving },
+    createdAt: Date.now(),
+  });
+}
+
+export async function queueSavingUpdate(saving: LocalSaving) {
+  const updated = { ...saving, syncStatus: "pending" as const, updatedAt: new Date().toISOString() };
+  await db.savings.put(updated);
+  await db.syncQueue.add({
+    clientId: saving.clientId,
+    action: "update",
+    entity: "saving",
+    payload: { ...updated },
+    createdAt: Date.now(),
+  });
+}
+
+export async function queueSavingDeletion(clientId: string) {
+  await db.savings.delete(clientId);
+  await db.syncQueue.add({
+    clientId,
+    action: "delete",
+    entity: "saving",
     payload: { clientId },
     createdAt: Date.now(),
   });
@@ -102,6 +136,12 @@ export async function flushSyncQueue(): Promise<{ success: boolean; syncedCount:
           await db.expenses.update(item.clientId, { syncStatus: "synced" });
         }
       }
+      if (item.entity === "saving" && item.action !== "delete") {
+        const saving = await db.savings.get(item.clientId);
+        if (saving) {
+          await db.savings.update(item.clientId, { syncStatus: "synced" });
+        }
+      }
       if (item.id !== undefined) {
         await db.syncQueue.delete(item.id);
       }
@@ -170,9 +210,6 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
                 ? new Date(sExp.updatedAt).toISOString()
                 : new Date().toISOString(),
               syncStatus: "synced",
-              // Preserve savings flags from server
-              isSaving: Boolean(sExp.isSaving) || undefined,
-              fromSavings: Boolean(sExp.fromSavings) || undefined,
             };
             await db.expenses.put(localExp);
           }
@@ -188,6 +225,52 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
       }
     }
 
+    // 3. Pull savings
+    const savRes = await fetch("/api/savings");
+    if (savRes.ok) {
+      const savData = await savRes.json();
+      if (Array.isArray(savData.savings)) {
+        const pendingItems = await db.syncQueue.toArray();
+        const pendingClientIds = new Set(pendingItems.map((p) => p.clientId));
+        const serverSavIds = new Set<string>();
+
+        for (const sSav of savData.savings) {
+          const clientId = sSav.clientId || sSav._id?.toString();
+          serverSavIds.add(clientId);
+
+          if (!pendingClientIds.has(clientId)) {
+            const localSav: LocalSaving = {
+              clientId,
+              userId: sSav.userId,
+              amount: Number(sSav.amount) || 0,
+              type: sSav.type || "deposit",
+              note: sSav.note || "",
+              date:
+                typeof sSav.date === "string"
+                  ? sSav.date.split("T")[0]
+                  : new Date(sSav.date).toISOString().split("T")[0],
+              createdAt: sSav.createdAt
+                ? new Date(sSav.createdAt).toISOString()
+                : new Date().toISOString(),
+              updatedAt: sSav.updatedAt
+                ? new Date(sSav.updatedAt).toISOString()
+                : new Date().toISOString(),
+              syncStatus: "synced",
+              linkedExpenseId: sSav.linkedExpenseId || undefined,
+            };
+            await db.savings.put(localSav);
+          }
+        }
+
+        const localSavings = await db.savings.toArray();
+        for (const localSav of localSavings) {
+          if (!pendingClientIds.has(localSav.clientId) && !serverSavIds.has(localSav.clientId)) {
+            await db.savings.delete(localSav.clientId);
+          }
+        }
+      }
+    }
+
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Pull error";
@@ -197,6 +280,7 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
 
 export async function clearAllLocalExpenses(): Promise<void> {
   await db.expenses.clear();
-  await db.syncQueue.where("entity").equals("expense").delete();
+  await db.savings.clear();
+  await db.syncQueue.where("entity").anyOf("expense", "saving").delete();
 }
 

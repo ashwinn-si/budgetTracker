@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
-import { db, LocalExpense } from "@/lib/offline/db";
-import { queueExpenseDeletion } from "@/lib/offline/syncQueue";
+import { db, LocalExpense, LocalSaving } from "@/lib/offline/db";
+import { queueExpenseDeletion, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SavingsDepositModal } from "@/components/savings/SavingsDepositModal";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
@@ -30,7 +30,7 @@ export default function SavingsPage() {
   const { formatAmount } = useCurrency();
 
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
-  const [editingDeposit, setEditingDeposit] = useState<LocalExpense | null>(null);
+  const [editingDeposit, setEditingDeposit] = useState<LocalSaving | null>(null);
 
   // Allow editing an expense withdrawal if needed
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
@@ -40,6 +40,7 @@ export default function SavingsPage() {
   const [searchTerm, setSearchTerm] = useState("");
 
   // Live queries
+  const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
   const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
   const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
 
@@ -49,14 +50,13 @@ export default function SavingsPage() {
 
   // Savings Metrics
   const { totalSaved, totalFromSavings, balance, savingsList } = useMemo(() => {
-    const deposits = allExpenses.filter((e) => e.isSaving);
-    const withdrawals = allExpenses.filter((e) => e.fromSavings);
+    const deposits = allSavings.filter((e) => e.type === "deposit");
+    const withdrawals = allSavings.filter((e) => e.type === "withdrawal");
 
     const savedSum = deposits.reduce((sum, e) => sum + e.amount, 0);
     const withdrawnSum = withdrawals.reduce((sum, e) => sum + e.amount, 0);
 
-    // Combine all savings-related records
-    const combined = [...deposits, ...withdrawals].sort(
+    const combined = [...allSavings].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
@@ -66,23 +66,28 @@ export default function SavingsPage() {
       balance: savedSum - withdrawnSum,
       savingsList: combined,
     };
-  }, [allExpenses]);
+  }, [allSavings]);
 
   // Filtered savings logs
   const filteredLogs = useMemo(() => {
     return savingsList.filter((item) => {
       // Tab filter
-      if (filterTab === "deposits" && !item.isSaving) return false;
-      if (filterTab === "withdrawals" && !item.fromSavings) return false;
+      if (filterTab === "deposits" && item.type !== "deposit") return false;
+      if (filterTab === "withdrawals" && item.type !== "withdrawal") return false;
 
       // Search filter
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
         const matchesNote = (item.note || "").toLowerCase().includes(q);
         const matchesAmount = item.amount.toString().includes(q);
-        const matchesTag =
-          item.tagIds &&
-          item.tagIds.some((tId) => (tagMap.get(tId)?.name || "").toLowerCase().includes(q));
+        
+        let matchesTag = false;
+        if (item.linkedExpenseId) {
+          const exp = allExpenses.find(e => e.clientId === item.linkedExpenseId);
+          if (exp && exp.tagIds) {
+            matchesTag = exp.tagIds.some((tId) => (tagMap.get(tId)?.name || "").toLowerCase().includes(q));
+          }
+        }
         if (!matchesNote && !matchesAmount && !matchesTag) return false;
       }
 
@@ -90,19 +95,31 @@ export default function SavingsPage() {
     });
   }, [savingsList, filterTab, searchTerm, tagMap]);
 
-  const handleDelete = async (clientId: string) => {
+  const handleDelete = async (item: LocalSaving) => {
     if (confirm("Are you sure you want to delete this record?")) {
-      await queueExpenseDeletion(clientId);
+      await queueSavingDeletion(item.clientId);
+      if (item.linkedExpenseId) {
+        await queueExpenseDeletion(item.linkedExpenseId);
+      }
     }
   };
 
-  const handleEditRecord = (item: LocalExpense) => {
-    if (item.isSaving) {
+  const handleEditRecord = (item: LocalSaving) => {
+    if (item.type === "deposit") {
       setEditingDeposit(item);
       setIsDepositModalOpen(true);
     } else {
-      setEditingExpense(item);
-      setIsExpenseModalOpen(true);
+      if (item.linkedExpenseId) {
+        const expense = allExpenses.find((e) => e.clientId === item.linkedExpenseId);
+        if (expense) {
+          setEditingExpense(expense);
+          setIsExpenseModalOpen(true);
+        } else {
+          alert("Linked expense not found.");
+        }
+      } else {
+        alert("Cannot edit standalone withdrawal yet.");
+      }
     }
   };
 
@@ -188,8 +205,8 @@ export default function SavingsPage() {
               {formatAmount(totalSaved)}
             </p>
             <p className="text-[11px] text-[var(--text-muted)] mt-1">
-              {allExpenses.filter((e) => e.isSaving).length} deposit transaction
-              {allExpenses.filter((e) => e.isSaving).length === 1 ? "" : "s"}
+              {allSavings.filter((e) => e.type === "deposit").length} deposit transaction
+              {allSavings.filter((e) => e.type === "deposit").length === 1 ? "" : "s"}
             </p>
           </div>
         </GlassCard>
@@ -210,8 +227,8 @@ export default function SavingsPage() {
               {formatAmount(totalFromSavings)}
             </p>
             <p className="text-[11px] text-[var(--text-muted)] mt-1">
-              {allExpenses.filter((e) => e.fromSavings).length} expenditure
-              {allExpenses.filter((e) => e.fromSavings).length === 1 ? "" : "s"} drawn from savings
+              {allSavings.filter((e) => e.type === "withdrawal").length} expenditure
+              {allSavings.filter((e) => e.type === "withdrawal").length === 1 ? "" : "s"} drawn from savings
             </p>
           </div>
         </GlassCard>
@@ -241,7 +258,7 @@ export default function SavingsPage() {
               }`}
             >
               <PiggyBank className="w-3 h-3" />
-              Deposits ({allExpenses.filter((e) => e.isSaving).length})
+              Deposits ({allSavings.filter((e) => e.type === "deposit").length})
             </button>
             <button
               onClick={() => setFilterTab("withdrawals")}
@@ -252,7 +269,7 @@ export default function SavingsPage() {
               }`}
             >
               <ArrowDownLeft className="w-3 h-3" />
-              Spent from Savings ({allExpenses.filter((e) => e.fromSavings).length})
+              Spent from Savings ({allSavings.filter((e) => e.type === "withdrawal").length})
             </button>
           </div>
 
@@ -303,13 +320,17 @@ export default function SavingsPage() {
           </GlassCard>
         ) : (
           filteredLogs.map((item) => {
-            const isDeposit = item.isSaving;
+            const isDeposit = item.type === "deposit";
             const itemDate = new Date(item.date).toLocaleDateString(undefined, {
               weekday: "short",
               day: "numeric",
               month: "short",
               year: "numeric",
             });
+
+            // Find linked expense tags for withdrawals
+            const linkedExp = item.linkedExpenseId ? allExpenses.find((e) => e.clientId === item.linkedExpenseId) : null;
+            const itemTagIds = linkedExp?.tagIds || [];
 
             return (
               <GlassCard
@@ -377,9 +398,9 @@ export default function SavingsPage() {
                       </span>
 
                       {/* Show category tag for expenditures */}
-                      {!isDeposit && item.tagIds && item.tagIds.length > 0 && (
+                      {!isDeposit && itemTagIds.length > 0 && (
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {item.tagIds.map((tId) => {
+                          {itemTagIds.map((tId) => {
                             const tag = tagMap.get(tId);
                             if (!tag) return null;
                             return (
@@ -428,7 +449,7 @@ export default function SavingsPage() {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => handleDelete(item.clientId)}
+                      onClick={() => handleDelete(item)}
                       aria-label="Delete record"
                       title="Delete"
                       className="p-2 rounded-xl text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"

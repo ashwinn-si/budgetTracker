@@ -1,5 +1,8 @@
 @AGENTS.md
 
+# Agent Instructions
+**Please read [`agent-instructions.md`](./agent-instructions.md) for full project architecture, guidelines, and tech stack details before writing any code.**
+
 <!-- code-review-graph MCP tools -->
 ## MCP Tools: code-review-graph
 

@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
 import { Tag } from "@/models/Tag";
+import { Saving } from "@/models/Saving";
 import { getCurrentUser } from "@/lib/auth";
 
 interface SyncItem {
   clientId: string;
   action: "create" | "update" | "delete";
-  entity: "expense" | "tag";
+  entity: "expense" | "tag" | "saving";
   payload: Record<string, unknown>;
   createdAt: number;
 }
@@ -52,8 +53,6 @@ export async function POST(req: NextRequest) {
             tagIds: Array.isArray(payload.tagIds) ? payload.tagIds : [],
             date: payload.date ? new Date(payload.date as string) : new Date(),
             syncStatus: "synced",
-            isSaving: Boolean(payload.isSaving),
-            fromSavings: Boolean(payload.fromSavings),
             ...(payload.updatedAt ? { updatedAt: new Date(payload.updatedAt as string) } : {}),
           };
 
@@ -95,6 +94,43 @@ export async function POST(req: NextRequest) {
           processedCount++;
         } else if (item.action === "delete") {
           await Tag.deleteOne({ _id: item.clientId, userId });
+          processedCount++;
+        }
+      } else if (item.entity === "saving") {
+        const payload = item.payload;
+        if (item.action === "create" || item.action === "update") {
+          const filter: any = item.clientId
+            ? { clientId: item.clientId, userId }
+            : { _id: payload._id, userId };
+
+          const updateDoc = {
+            userId,
+            clientId: item.clientId,
+            amount: Number(payload.amount) || 0,
+            type: payload.type as "deposit" | "withdrawal",
+            note: (payload.note as string) || "",
+            date: payload.date ? new Date(payload.date as string) : new Date(),
+            syncStatus: "synced",
+            linkedExpenseId: payload.linkedExpenseId || undefined,
+            ...(payload.updatedAt ? { updatedAt: new Date(payload.updatedAt as string) } : {}),
+          };
+
+          await Saving.findOneAndUpdate(
+            filter,
+            { $set: updateDoc },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
+          processedCount++;
+        } else if (item.action === "delete") {
+          const deleteFilter: any = { userId };
+          if (item.clientId && payload.id) {
+            deleteFilter.$or = [{ clientId: item.clientId }, { _id: payload.id }];
+          } else if (item.clientId) {
+            deleteFilter.clientId = item.clientId;
+          } else if (payload.id) {
+            deleteFilter._id = payload.id;
+          }
+          await Saving.deleteOne(deleteFilter);
           processedCount++;
         }
       }

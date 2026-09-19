@@ -4,8 +4,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { PiggyBank, Calendar, FileText } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { LocalExpense } from "@/lib/offline/db";
-import { queueExpenseCreation, queueExpenseUpdate } from "@/lib/offline/syncQueue";
+import { LocalSaving } from "@/lib/offline/db";
+import { queueSavingCreation, queueSavingUpdate } from "@/lib/offline/syncQueue";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { formatAmountInput, parseAmountInput } from "@/lib/currency";
@@ -13,7 +13,7 @@ import { formatAmountInput, parseAmountInput } from "@/lib/currency";
 interface SavingsDepositModalProps {
   isOpen: boolean;
   onClose: () => void;
-  initialDeposit?: LocalExpense | null;
+  initialDeposit?: LocalSaving | null;
   onSaved?: () => void;
 }
 
@@ -115,33 +115,28 @@ export function SavingsDepositModal({
       const now = new Date().toISOString();
 
       if (initialDeposit) {
-        const updatedExpense: LocalExpense = {
+        const updatedSaving: LocalSaving = {
           ...initialDeposit,
           amount: parsedAmount,
           note: note.trim(),
           date,
-          tagIds: [],
           updatedAt: now,
           syncStatus: "pending",
-          isSaving: true,
-          fromSavings: undefined,
         };
-        await queueExpenseUpdate(updatedExpense);
+        await queueSavingUpdate(updatedSaving);
       } else {
-        const newDeposit: LocalExpense = {
-          clientId: `exp_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
+        const newDeposit: LocalSaving = {
+          clientId: `sav_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
           userId,
           amount: parsedAmount,
+          type: "deposit",
           note: note.trim(),
           date,
-          tagIds: [],
           createdAt: now,
           updatedAt: now,
           syncStatus: "pending",
-          isSaving: true,
-          fromSavings: undefined,
         };
-        await queueExpenseCreation(newDeposit);
+        await queueSavingCreation(newDeposit);
       }
 
       onSaved?.();
