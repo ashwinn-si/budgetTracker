@@ -13,6 +13,7 @@ import {
   FileSpreadsheet,
   Plus,
   RefreshCw,
+  ChevronDown,
 } from "lucide-react";
 import {
   AreaChart,
@@ -301,12 +302,12 @@ function DashboardContent() {
         </div>
 
         {/* Tag Dropdown Filter */}
-        <div className="flex items-center gap-2">
-          <Filter className="w-3.5 h-3.5 text-[var(--text-muted)]" />
+        <div className="relative group">
+          <Filter className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-emerald-500 transition-colors" />
           <select
             value={selectedTagParam}
             onChange={(e) => updateFilters(period, e.target.value)}
-            className="min-h-[38px] px-3 py-1.5 rounded-xl text-xs font-medium bg-white/50 dark:bg-black/40 border border-white/60 dark:border-white/10 text-[var(--text-primary)] outline-none cursor-pointer"
+            className="min-h-[38px] appearance-none pl-8.5 pr-8 py-1.5 rounded-xl text-xs font-medium bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 text-[var(--text-primary)] outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/30 transition-all shadow-xs hover:bg-white/80 dark:hover:bg-black/60"
           >
             <option value="all">All Categories</option>
             {allTags.map((tag) => (
@@ -315,6 +316,7 @@ function DashboardContent() {
               </option>
             ))}
           </select>
+          <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-[var(--text-primary)] transition-colors" />
         </div>
       </GlassCard>
 

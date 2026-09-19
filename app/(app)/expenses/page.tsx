@@ -13,6 +13,7 @@ import {
   ArrowUpDown,
   Filter,
   ReceiptText,
+  ChevronDown,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -134,12 +135,12 @@ export default function ExpensesPage() {
           </div>
 
           {/* Tag filter */}
-          <div className="sm:col-span-3 flex items-center gap-2">
-            <Filter className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+          <div className="sm:col-span-3 relative group">
+            <Filter className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-emerald-500 transition-colors" />
             <select
               value={selectedTag}
               onChange={(e) => setSelectedTag(e.target.value)}
-              className="w-full py-2.5 px-3 text-xs sm:text-sm bg-white/50 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl outline-none text-[var(--text-primary)] cursor-pointer"
+              className="w-full appearance-none pl-10 pr-9 py-2.5 text-xs sm:text-sm font-medium bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 text-[var(--text-primary)] cursor-pointer hover:bg-white/80 dark:hover:bg-black/60 transition-all shadow-xs"
             >
               <option value="all">All Tags</option>
               {allTags.map((tag) => (
@@ -148,21 +149,23 @@ export default function ExpensesPage() {
                 </option>
               ))}
             </select>
+            <ChevronDown className="w-4 h-4 text-[var(--text-muted)] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-[var(--text-primary)] transition-colors" />
           </div>
 
           {/* Sort selector */}
-          <div className="sm:col-span-3 flex items-center gap-2">
-            <ArrowUpDown className="w-4 h-4 text-[var(--text-muted)] shrink-0" />
+          <div className="sm:col-span-3 relative group">
+            <ArrowUpDown className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-emerald-500 transition-colors" />
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="w-full py-2.5 px-3 text-xs sm:text-sm bg-white/50 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl outline-none text-[var(--text-primary)] cursor-pointer"
+              className="w-full appearance-none pl-10 pr-9 py-2.5 text-xs sm:text-sm font-medium bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 text-[var(--text-primary)] cursor-pointer hover:bg-white/80 dark:hover:bg-black/60 transition-all shadow-xs"
             >
               <option value="date-desc">Newest First</option>
               <option value="date-asc">Oldest First</option>
               <option value="amount-desc">Highest Amount</option>
               <option value="amount-asc">Lowest Amount</option>
             </select>
+            <ChevronDown className="w-4 h-4 text-[var(--text-muted)] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-[var(--text-primary)] transition-colors" />
           </div>
         </div>
       </GlassCard>
