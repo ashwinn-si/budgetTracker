@@ -22,6 +22,7 @@ import { queueExpenseCreation, queueExpenseUpdate, queueTagCreation, queueSaving
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { formatAmountInput, parseAmountInput } from "@/lib/currency";
+import toast from "react-hot-toast";
 
 const PRESET_TAG_COLORS = [
   "#22C55E", // Emerald
@@ -226,7 +227,7 @@ export function ExpenseFormModal({
     e.preventDefault();
     const parsedAmount = parseAmountInput(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      alert("Please enter a valid amount greater than 0");
+      toast.error("Please enter a valid amount greater than 0");
       return;
     }
 

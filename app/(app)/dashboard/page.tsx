@@ -24,6 +24,7 @@ import { useSync } from "@/lib/offline/useSync";
 import { useLoading } from "@/context/LoadingContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SpendingActivityChart } from "@/components/dashboard/SpendingActivityChart";
+import toast from "react-hot-toast";
 import { DateRangeFilter, PeriodPreset } from "@/components/dashboard/DateRangeFilter";
 import { TagFilter } from "@/components/dashboard/TagFilter";
 
@@ -275,8 +276,8 @@ function DashboardContent() {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error("Failed to download Excel file:", err);
-      alert("Failed to download Excel export. Please try again.");
+      console.error(err);
+      toast.error("Failed to download Excel export. Please try again.");
     } finally {
       setIsExporting(false);
       stopLoading();

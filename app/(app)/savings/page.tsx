@@ -23,6 +23,7 @@ import { queueExpenseDeletion, queueSavingDeletion } from "@/lib/offline/syncQue
 import { useCurrency } from "@/context/CurrencyContext";
 import { SavingsDepositModal } from "@/components/savings/SavingsDepositModal";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
+import toast from "react-hot-toast";
 
 type FilterTab = "all" | "deposits" | "withdrawals";
 
@@ -115,10 +116,10 @@ export default function SavingsPage() {
           setEditingExpense(expense);
           setIsExpenseModalOpen(true);
         } else {
-          alert("Linked expense not found.");
+          toast.error("Linked expense not found.");
         }
       } else {
-        alert("Cannot edit standalone withdrawal yet.");
+        toast.error("Cannot edit standalone withdrawal yet.");
       }
     }
   };

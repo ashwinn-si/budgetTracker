@@ -9,6 +9,7 @@ import { queueSavingCreation, queueSavingUpdate } from "@/lib/offline/syncQueue"
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { formatAmountInput, parseAmountInput } from "@/lib/currency";
+import toast from "react-hot-toast";
 
 interface SavingsDepositModalProps {
   isOpen: boolean;
@@ -106,7 +107,7 @@ export function SavingsDepositModal({
     e.preventDefault();
     const parsedAmount = parseAmountInput(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      alert("Please enter a valid amount greater than 0");
+      toast.error("Please enter a valid amount greater than 0");
       return;
     }
 

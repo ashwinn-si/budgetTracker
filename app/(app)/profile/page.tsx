@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useCurrency } from "@/context/CurrencyContext";
@@ -126,9 +128,11 @@ export default function ProfilePage() {
       setIsResetRequested(true);
       if (data.devResetUrl) {
         setDevResetLink(data.devResetUrl);
+      } else {
+        toast.error("Failed to send reset link");
       }
     } catch {
-      alert("Failed to send reset link");
+      toast.error("Failed to send reset link");
     }
   };
 
@@ -142,13 +146,17 @@ export default function ProfilePage() {
 
     setIsClearingDb(true);
     try {
-      await fetch("/api/expenses/clear", { method: "POST" });
-      await clearAllLocalExpenses();
-      alert("Database cleared! All expenses and savings have been reset.");
-      window.location.reload();
+      const res = await fetch("/api/expenses/clear", { method: "POST" });
+      if (res.ok) {
+        await clearAllLocalExpenses();
+        toast.success("Database cleared! All expenses and savings have been reset.");
+        window.location.reload();
+      } else {
+        toast.error("Failed to clear database.");
+      }
     } catch (err) {
       console.error("Failed to clear database:", err);
-      alert("An error occurred while clearing the database.");
+      toast.error("An error occurred while clearing the database.");
     } finally {
       setIsClearingDb(false);
     }
@@ -170,8 +178,9 @@ export default function ProfilePage() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch {
-      alert("Export failed. Please try again.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Export failed. Please try again.");
     } finally {
       setIsExporting(false);
     }
@@ -191,12 +200,13 @@ export default function ProfilePage() {
       const data = await res.json();
       if (res.ok) {
         updateUser({ isSharingEnabled: data.isSharingEnabled, shareId: data.shareId });
+        toast.success(data.isSharingEnabled ? "Sharing enabled" : "Sharing disabled");
       } else {
-        alert("Failed to update sharing preferences.");
+        toast.error("Failed to update sharing preferences.");
       }
     } catch (e) {
       console.error(e);
-      alert("Network error.");
+      toast.error("Network error.");
     } finally {
       setIsSharingLoading(false);
     }
@@ -205,7 +215,7 @@ export default function ProfilePage() {
   const handleCopyLink = () => {
     if (user?.shareId) {
       navigator.clipboard.writeText(`${window.location.origin}/share/${user.shareId}`);
-      alert("Link copied to clipboard!");
+      toast.success("Link copied!");
     }
   };
 

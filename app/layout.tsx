@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Poppins, Open_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
+import { Toaster } from "react-hot-toast";
 
 const poppins = Poppins({
   weight: ["300", "400", "500", "600", "700"],
@@ -98,6 +99,7 @@ export default function RootLayout({
         className="min-h-full flex flex-col font-sans"
       >
         <Providers>{children}</Providers>
+        <Toaster position="bottom-center" />
       </body>
     </html>
   );
