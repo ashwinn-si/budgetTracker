@@ -16,7 +16,24 @@ export function useSync() {
   const queueItems = useLiveQuery(() => db.syncQueue.toArray(), []);
   const pendingCount = queueItems?.length || 0;
 
-  // Track online/offline status
+  const triggerSync = useCallback(async () => {
+    if (!navigator.onLine || isSyncing) return;
+
+    setIsSyncing(true);
+    try {
+      const result = await flushSyncQueue();
+      await pullFromServer();
+      if (result.success) {
+        const now = new Date();
+        setLastSyncedAt(now);
+        localStorage.setItem("budget_last_synced", now.toISOString());
+      }
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing]);
+
+  // Track online/offline status + boot sync
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -34,7 +51,7 @@ export function useSync() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Initial check tags & sync
+    // Initial seed + sync on mount
     seedInitialDataIfEmpty().then(() => {
       triggerSync();
     });
@@ -50,22 +67,15 @@ export function useSync() {
     };
   }, []);
 
-  const triggerSync = useCallback(async () => {
-    if (!navigator.onLine || isSyncing) return;
-
-    setIsSyncing(true);
-    try {
-      const result = await flushSyncQueue();
-      await pullFromServer();
-      if (result.success) {
-        const now = new Date();
-        setLastSyncedAt(now);
-        localStorage.setItem("budget_last_synced", now.toISOString());
-      }
-    } finally {
-      setIsSyncing(false);
-    }
-  }, [isSyncing]);
+  // Auto-sync: whenever items appear in the queue, flush them after a
+  // short debounce so users never have to hit "Sync" manually
+  useEffect(() => {
+    if (pendingCount === 0 || isSyncing || !isOnline) return;
+    const timer = setTimeout(() => {
+      triggerSync();
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [pendingCount, isOnline, triggerSync]);
 
   let status: SyncState = "synced";
   if (!isOnline) {

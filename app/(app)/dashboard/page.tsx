@@ -280,15 +280,15 @@ function DashboardContent() {
           </h1>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
+        {/* Action Buttons — desktop only; mobile uses bottom nav + profile page */}
+        <div className="hidden sm:flex items-center gap-2 sm:gap-2.5">
           <Button
             variant="ghost"
             size="sm"
             onClick={handleExcelExport}
             isLoading={isExporting}
             icon={<Download className="w-4 h-4" />}
-            className="flex-1 sm:flex-initial text-xs sm:text-sm"
+            className="text-xs sm:text-sm"
           >
             Export Excel
           </Button>
@@ -299,7 +299,7 @@ function DashboardContent() {
             onClick={() => syncNow()}
             isLoading={isSyncing}
             icon={<RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin text-emerald-500" : ""}`} />}
-            className="flex-1 sm:flex-initial text-xs sm:text-sm"
+            className="text-xs sm:text-sm"
           >
             Sync
           </Button>
@@ -309,7 +309,7 @@ function DashboardContent() {
             size="sm"
             onClick={() => setIsAddExpenseOpen(true)}
             icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
-            className="hidden sm:inline-flex shadow-emerald-500/20 shadow-lg"
+            className="shadow-emerald-500/20 shadow-lg"
           >
             Add Expense
           </Button>

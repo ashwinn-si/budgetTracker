@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   ExternalLink,
   Coins,
+  Download,
+  FileDown,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -123,6 +125,29 @@ export default function ProfilePage() {
       }
     } catch {
       alert("Failed to send reset link");
+    }
+  };
+
+  // Excel export (same logic as dashboard)
+  const [isExporting, setIsExporting] = useState(false);
+  const handleExcelExport = async () => {
+    setIsExporting(true);
+    try {
+      const res = await fetch("/api/export/excel");
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `budget-export-${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      alert("Export failed. Please try again.");
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -281,6 +306,38 @@ export default function ProfilePage() {
 
         {/* ── Right: Sync & Integrations ── */}
         <div className="space-y-6">
+          {/* Export Data Card */}
+          <GlassCard variant="mid" className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                  <FileDown className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm sm:text-base text-[var(--text-primary)]">
+                    Export Data
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Download your full expense ledger as Excel
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleExcelExport}
+                isLoading={isExporting}
+                icon={<Download className="w-3.5 h-3.5" />}
+              >
+                Export Excel
+              </Button>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 text-xs text-[var(--text-muted)] space-y-1">
+              <p>Exports all expenses for the current period as an <span className="font-semibold text-amber-600 dark:text-amber-400">.xlsx</span> file.</p>
+              <p className="opacity-70">Use this for offline analysis, accountants, or personal archiving.</p>
+            </div>
+          </GlassCard>
           {/* Offline Sync Status */}
           <GlassCard variant="mid" className="p-6 space-y-4">
             <div className="flex items-center justify-between">
