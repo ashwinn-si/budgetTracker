@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useEffect, useState, use } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { PieChart, TrendingDown, TrendingUp, AlertCircle, Share2 } from "lucide-react";
+import { PieChart, TrendingDown, TrendingUp, AlertCircle, Share2, Moon, Sun, ChevronLeft, ChevronRight } from "lucide-react";
+import { SUPPORTED_CURRENCIES } from "@/lib/currency";
+import { useTheme } from "@/context/ThemeContext";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 
 interface CategoryBreakdown {
@@ -31,11 +34,18 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
   const [data, setData] = useState<SharedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
+
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     const fetchSharedData = async () => {
+      if (data) setIsFetching(true);
       try {
-        const res = await fetch(`/api/share/${shareId}`);
+        const month = currentDate.getMonth() + 1;
+        const year = currentDate.getFullYear();
+        const res = await fetch(`/api/share/${shareId}?month=${month}&year=${year}`);
         const result = await res.json();
         
         if (res.ok && result.success) {
@@ -47,11 +57,12 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
         setError("Network error. Please try again later.");
       } finally {
         setLoading(false);
+        setIsFetching(false);
       }
     };
 
     fetchSharedData();
-  }, [shareId]);
+  }, [shareId, currentDate]);
 
   if (loading) {
     return (
@@ -96,7 +107,26 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-teal-500/10 blur-[120px]" />
       </div>
 
-      <main className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 pt-12 sm:pt-20 pb-24 space-y-8">
+      <main className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24 space-y-8">
+        
+        {/* Top Navbar */}
+        <div className="flex items-center justify-between mb-2">
+          <Link href="/" className="flex items-center gap-2 group">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-all">
+              <div className="w-3.5 h-3.5 border-2 border-white rounded-full" />
+            </div>
+            <span className="font-serif-display font-bold text-lg tracking-tight text-[var(--text-primary)]">
+              BudgetFlow
+            </span>
+          </Link>
+          
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </button>
+        </div>
         
         <PageHeader 
           eyebrow="Public Dashboard"
@@ -127,7 +157,7 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
                 <TrendingUp className="w-5 h-5" />
               </div>
               <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                Net Savings (All-Time)
+                Current Savings Balance
               </h2>
             </div>
             <div className="text-4xl sm:text-5xl font-serif-display font-bold text-[var(--text-primary)] tracking-tight">
@@ -137,18 +167,39 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
         </div>
 
         {/* Category Breakdown */}
-        <GlassCard variant="mid" className="p-6 sm:p-8">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-              <PieChart className="w-5 h-5" />
+        <GlassCard variant="mid" className={`p-6 sm:p-8 transition-opacity duration-300 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <PieChart className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)]">
+                  Category Breakdown
+                </h2>
+                <p className="text-sm text-[var(--text-muted)]">
+                  For {data.month} {data.year}
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)]">
-                Category Breakdown
-              </h2>
-              <p className="text-sm text-[var(--text-muted)]">
-                For {data.month} {data.year}
-              </p>
+
+            <div className="flex items-center gap-2">
+              <button 
+                onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="text-sm font-medium w-24 text-center text-[var(--text-primary)]">
+                {data.month} {data.year}
+              </span>
+              <button 
+                onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()}
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
             </div>
           </div>
 

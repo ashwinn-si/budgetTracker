@@ -29,10 +29,17 @@ export async function GET(
 
     const userId = user._id.toString();
 
-    // 2. Compute date range (Current Month)
+    // 2. Compute date range
+    const url = new URL(request.url);
+    const monthParam = url.searchParams.get("month");
+    const yearParam = url.searchParams.get("year");
+
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const targetYear = yearParam ? parseInt(yearParam, 10) : now.getFullYear();
+    const targetMonth = monthParam ? parseInt(monthParam, 10) - 1 : now.getMonth();
+
+    const startOfMonth = new Date(targetYear, targetMonth, 1);
+    const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
 
     // 3. Aggregate Monthly Expenses
     const monthlyExpensesResult = await Expense.aggregate([
