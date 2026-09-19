@@ -95,7 +95,7 @@ export default function TermsOfServicePage() {
             <span>5. Contact Information</span>
           </h2>
           <p>
-            If you have questions regarding these Terms, please contact us at <a href="mailto:ashwin.siiiiii@gmail.com" className="text-emerald-600 dark:text-emerald-400 underline font-medium">ashwin.siiiiii@gmail.com</a>.
+            If you have questions regarding these Terms, please contact us at <a href="mailto:siashwin2005@gmail.com" className="text-emerald-600 dark:text-emerald-400 underline font-medium">siashwin2005@gmail.com</a>.
           </p>
         </section>
       </GlassCard>

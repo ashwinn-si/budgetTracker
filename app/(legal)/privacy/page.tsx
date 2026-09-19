@@ -117,7 +117,7 @@ export default function PrivacyPolicyPage() {
             <span>5. Your Rights & Data Deletion</span>
           </h2>
           <p>
-            You have full control over your data. You may review, modify, export (via Excel or Google Sheets), or permanently delete your account and associated transactions at any time via your Profile page or by contacting us at <a href="mailto:ashwin.siiiiii@gmail.com" className="text-emerald-600 dark:text-emerald-400 underline font-medium">ashwin.siiiiii@gmail.com</a>.
+            You have full control over your data. You may review, modify, export (via Excel or Google Sheets), or permanently delete your account and associated transactions at any time via your Profile page or by contacting us at <a href="mailto:siashwin2005@gmail.com" className="text-emerald-600 dark:text-emerald-400 underline font-medium">siashwin2005@gmail.com</a>.
           </p>
         </section>
       </GlassCard>
