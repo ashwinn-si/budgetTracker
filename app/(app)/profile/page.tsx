@@ -213,6 +213,48 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          {/* Currency & Regional Settings */}
+          <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 whitespace-nowrap">
+                <Coins className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                <span>Currency & Regional Unit</span>
+              </label>
+              <div className="self-start sm:self-auto inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-serif-display whitespace-nowrap shadow-2xs">
+                <span className="text-[10px] uppercase font-sans font-medium text-emerald-600/70 dark:text-emerald-400/70">
+                  Preview:
+                </span>
+                <span className="font-semibold">{formatAmount(14500)}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {Object.values(SUPPORTED_CURRENCIES).map((c) => {
+                const active = currency === c.code;
+                return (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => setCurrency(c.code)}
+                    className={`min-h-[54px] py-2 px-1 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer border select-none ${
+                      active
+                        ? "bg-emerald-500/15 border-emerald-500 text-emerald-800 dark:text-emerald-300 font-semibold shadow-sm ring-1 ring-emerald-500/40 scale-[1.01]"
+                        : "bg-white/40 dark:bg-black/30 border-black/5 dark:border-white/10 text-[var(--text-secondary)] hover:bg-white/70 dark:hover:bg-white/5 hover:border-emerald-500/30"
+                    }`}
+                  >
+                    <span className="flex items-center justify-center gap-1.5 text-sm font-bold font-serif-display leading-none">
+                      <span className="text-base leading-none">{c.flag}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">{c.symbol}</span>
+                    </span>
+                    <span className="text-[10.5px] sm:text-[11px] text-[var(--text-muted)] font-sans font-medium mt-1 truncate w-full px-1 text-center whitespace-nowrap leading-tight">
+                      {c.code} • {c.shortName}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Password Reset */}
           <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-2">
             <div className="flex items-center justify-between">
@@ -261,57 +303,8 @@ export default function ProfilePage() {
           </div>
         </GlassCard>
 
-        {/* Right Column: Currency Settings & Sync Integrations */}
+        {/* Right Column: Sync & Integrations */}
         <div className="lg:col-span-6 space-y-6">
-          {/* Currency & Money Display Settings Card */}
-          <GlassCard variant="strong" className="p-6 sm:p-7 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shadow-xs">
-                  <Coins className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-sm sm:text-base text-[var(--text-primary)] font-heading">
-                    Currency & Money Format
-                  </h3>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    Active currency for expenses, charts, and exports
-                  </p>
-                </div>
-              </div>
-
-              <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 font-serif-display shadow-2xs whitespace-nowrap">
-                {formatAmount(14500)}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 pt-1">
-              {Object.values(SUPPORTED_CURRENCIES).map((c) => {
-                const active = currency === c.code;
-                return (
-                  <button
-                    key={c.code}
-                    type="button"
-                    onClick={() => setCurrency(c.code)}
-                    className={`min-h-[56px] p-2.5 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer border select-none ${
-                      active
-                        ? "bg-emerald-500/15 border-emerald-500 text-emerald-800 dark:text-emerald-300 font-semibold shadow-sm ring-1 ring-emerald-500/40 scale-[1.02]"
-                        : "bg-white/40 dark:bg-black/30 border-black/5 dark:border-white/10 text-[var(--text-secondary)] hover:bg-white/70 dark:hover:bg-white/5 hover:border-emerald-500/30"
-                    }`}
-                  >
-                    <span className="flex items-center gap-1.5 text-sm font-bold font-serif-display">
-                      <span className="text-base leading-none">{c.flag}</span>
-                      <span className="text-emerald-600 dark:text-emerald-400">{c.symbol}</span>
-                    </span>
-                    <span className="text-[11px] text-[var(--text-muted)] font-sans font-medium mt-0.5">
-                      {c.code} • {c.name.split(" ")[0]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </GlassCard>
-
           {/* Offline Sync Status */}
           <GlassCard variant="mid" className="p-6 space-y-4">
             <div className="flex items-center justify-between">

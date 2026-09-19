@@ -2,6 +2,7 @@ export interface CurrencyInfo {
   code: string;
   symbol: string;
   name: string;
+  shortName: string;
   locale: string;
   flag: string;
 }
@@ -11,6 +12,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "INR",
     symbol: "₹",
     name: "Indian Rupee",
+    shortName: "Rupee",
     locale: "en-IN",
     flag: "🇮🇳",
   },
@@ -18,6 +20,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "USD",
     symbol: "$",
     name: "US Dollar",
+    shortName: "Dollar",
     locale: "en-US",
     flag: "🇺🇸",
   },
@@ -25,6 +28,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "EUR",
     symbol: "€",
     name: "Euro",
+    shortName: "Euro",
     locale: "de-DE",
     flag: "🇪🇺",
   },
@@ -32,6 +36,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "GBP",
     symbol: "£",
     name: "British Pound",
+    shortName: "Pound",
     locale: "en-GB",
     flag: "🇬🇧",
   },
@@ -39,6 +44,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "AED",
     symbol: "د.إ",
     name: "UAE Dirham",
+    shortName: "Dirham",
     locale: "ar-AE",
     flag: "🇦🇪",
   },
@@ -46,6 +52,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "CAD",
     symbol: "CA$",
     name: "Canadian Dollar",
+    shortName: "Dollar",
     locale: "en-CA",
     flag: "🇨🇦",
   },
@@ -53,6 +60,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "AUD",
     symbol: "A$",
     name: "Australian Dollar",
+    shortName: "Dollar",
     locale: "en-AU",
     flag: "🇦🇺",
   },
@@ -60,6 +68,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "JPY",
     symbol: "¥",
     name: "Japanese Yen",
+    shortName: "Yen",
     locale: "ja-JP",
     flag: "🇯🇵",
   },
@@ -67,6 +76,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "SGD",
     symbol: "S$",
     name: "Singapore Dollar",
+    shortName: "Dollar",
     locale: "en-SG",
     flag: "🇸🇬",
   },
@@ -74,6 +84,7 @@ export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
     code: "CHF",
     symbol: "CHF",
     name: "Swiss Franc",
+    shortName: "Franc",
     locale: "de-CH",
     flag: "🇨🇭",
   },
