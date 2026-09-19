@@ -401,7 +401,7 @@ export default function ProfilePage() {
               Tag Management
             </h2>
             <p className="text-xs text-[var(--text-muted)]">
-              Organize expense categories, custom colors, and check usage counts
+              Organize expense categories and custom colors
             </p>
           </div>
           <Button
@@ -414,41 +414,37 @@ export default function ProfilePage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        <div className="max-h-72 sm:max-h-80 overflow-y-auto pr-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {tags.map((tag) => {
-            const count = tagUsageCount[tag._id] || 0;
             return (
               <div
                 key={tag._id}
-                className="p-3.5 rounded-2xl glass-light border border-white/50 dark:border-white/10 flex items-center justify-between gap-3"
+                className="p-3.5 rounded-2xl glass-light border border-white/50 dark:border-white/10 flex items-center justify-between gap-3 shadow-2xs hover:border-emerald-500/30 transition-all"
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-3 min-w-0">
                   <span
-                    className="w-4 h-4 rounded-full shrink-0 shadow-sm"
+                    className="w-4 h-4 rounded-full shrink-0 shadow-xs ring-1 ring-black/10 dark:ring-white/20"
                     style={{ backgroundColor: tag.colorKey }}
                   />
-                  <div className="min-w-0">
-                    <p className="font-semibold text-xs sm:text-sm text-[var(--text-primary)] truncate">
-                      {tag.name}
-                    </p>
-                    <p className="text-[11px] text-[var(--text-muted)]">
-                      {count} {count === 1 ? "expense" : "expenses"}
-                    </p>
-                  </div>
+                  <p className="font-semibold text-xs sm:text-sm text-[var(--text-primary)] truncate">
+                    {tag.name}
+                  </p>
                 </div>
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     onClick={() => handleOpenTagModal(tag)}
                     aria-label="Edit tag"
-                    className="min-h-[38px] min-w-[38px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                    title="Edit category"
+                    className="min-h-[34px] min-w-[34px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors cursor-pointer"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => setDeletingTagId(tag._id)}
                     aria-label="Delete tag"
-                    className="min-h-[38px] min-w-[38px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                    title="Delete category"
+                    className="min-h-[34px] min-w-[34px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
