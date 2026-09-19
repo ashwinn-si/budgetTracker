@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { format } from "date-fns";
+import { formatDate } from "@/lib/dateUtils";
 import { Calendar as CalendarIcon, ChevronDown, Check } from "lucide-react";
 import { DayPicker, DateRange } from "react-day-picker";
 import "react-day-picker/style.css";
@@ -71,7 +71,7 @@ export function DateRangeFilter({
 
   const customRangeLabel =
     period === "custom"
-      ? `${format(startDate, "MMM d")} – ${format(endDate, "MMM d, yyyy")}`
+      ? `${formatDate(startDate)} – ${formatDate(endDate)}`
       : "Custom Range";
 
   return (
@@ -107,8 +107,8 @@ export function DateRangeFilter({
               Select Custom Range
             </span>
             <span className="text-[11px] text-[var(--text-muted)]">
-              {range?.from ? format(range.from, "MMM d, yyyy") : "Start"} –{" "}
-              {range?.to ? format(range.to, "MMM d, yyyy") : "End"}
+              {range?.from ? formatDate(range.from) : "Start"} –{" "}
+              {range?.to ? formatDate(range.to) : "End"}
             </span>
           </div>
 
