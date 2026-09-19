@@ -111,7 +111,7 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
         
         {/* Top Navbar */}
         <div className="flex items-center justify-between mb-2">
-          <Link href="/" className="flex items-center group">
+          <Link href="/" className="flex items-center gap-2 group">
             <Image 
               src="/logo.png" 
               alt="BudgetFlow Logo" 
@@ -119,6 +119,9 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
               height={40} 
               className="rounded-xl shadow-md group-hover:shadow-lg transition-all"
             />
+            <span className="font-serif-display font-bold text-lg tracking-tight text-[var(--text-primary)]">
+              BudgetFlow
+            </span>
           </Link>
           
           <button
