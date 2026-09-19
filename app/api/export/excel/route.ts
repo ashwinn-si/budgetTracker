@@ -5,123 +5,430 @@ import { Expense } from "@/models/Expense";
 import { Tag } from "@/models/Tag";
 import { User } from "@/models/User";
 import { getCurrentUser } from "@/lib/auth";
+import { getExcelCurrencyFormat } from "@/lib/currency";
+
+function formatDateDisplay(date: Date): string {
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = date.toLocaleString("en-US", { month: "short" });
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
+}
+
+function formatDateForFilename(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
 export async function GET(req: NextRequest) {
   try {
-    const user = await getCurrentUser(req);
-    const userId = user?.userId || "local_user";
+    const userSession = await getCurrentUser(req);
+    const userId = userSession?.userId || "local_user";
 
     let userCurrency = "INR";
-    if (user) {
-      await connectToDatabase();
-      const dbUser = await User.findById(user.userId);
-      if (dbUser?.currency) userCurrency = dbUser.currency;
+    let dbConnected = false;
+
+    try {
+      const db = await connectToDatabase();
+      if (db) {
+        dbConnected = true;
+        if (userSession?.userId) {
+          const dbUser = await User.findById(userSession.userId).lean();
+          if (dbUser?.currency) userCurrency = dbUser.currency;
+        }
+      }
+    } catch (err) {
+      console.warn("DB connection warning during export:", err);
     }
 
     const { searchParams } = new URL(req.url);
-    const startDate = searchParams.get("startDate");
-    const endDate = searchParams.get("endDate");
-    const tagIds = searchParams.get("tagIds")?.split(",").filter(Boolean);
+    const startDateParam = searchParams.get("startDate");
+    const endDateParam = searchParams.get("endDate");
+    const tagIdsParam = searchParams.get("tagIds")?.split(",").filter(Boolean);
+    const tagNamesParam = searchParams.get("tagNames")?.split(",").filter(Boolean);
 
+    // Build DB filter
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filter: any = { userId };
-    if (startDate || endDate) {
+    let parsedStartDate: Date | null = startDateParam ? new Date(startDateParam) : null;
+    let parsedEndDate: Date | null = endDateParam ? new Date(endDateParam) : null;
+
+    if (parsedStartDate || parsedEndDate) {
       filter.date = {};
-      if (startDate) filter.date.$gte = new Date(startDate);
-      if (endDate) filter.date.$lte = new Date(endDate);
-    }
-    if (tagIds && tagIds.length > 0) {
-      filter.tagIds = { $in: tagIds };
+      if (parsedStartDate) {
+        filter.date.$gte = parsedStartDate;
+      }
+      if (parsedEndDate) {
+        // Include full day of endDate
+        const endOfDay = new Date(parsedEndDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        filter.date.$lte = endOfDay;
+      }
     }
 
-    let expensesData: Array<{
-      date: string;
+    if (tagIdsParam && tagIdsParam.length > 0) {
+      filter.tagIds = { $in: tagIdsParam };
+    }
+
+    interface ProcessedExpense {
+      date: Date;
       note: string;
-      tags: string;
+      tags: string[];
       amount: number;
-    }> = [];
+    }
 
-    const db = await connectToDatabase();
-    if (db) {
+    let expensesData: ProcessedExpense[] = [];
+    let resolvedTagNames: string[] = tagNamesParam || [];
+
+    if (dbConnected) {
+      // Fetch user's expenses sorted oldest first as required by spec
       const expenses = await Expense.find(filter)
-        .sort({ date: -1 })
+        .sort({ date: 1 })
         .populate("tagIds")
         .lean();
 
       expensesData = expenses.map((exp) => {
-        const tagNames = (exp.tagIds as any[])
-          ?.map((t) => (typeof t === "object" ? t.name : ""))
-          .filter(Boolean)
-          .join(", ");
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rawTags: any[] = (exp.tagIds as any[]) || [];
+        const tags = rawTags
+          .map((t) => (typeof t === "object" ? t.name : String(t)))
+          .filter(Boolean);
+
         return {
-          date: new Date(exp.date).toISOString().split("T")[0],
+          date: new Date(exp.date),
           note: exp.note || "No note",
-          tags: tagNames || "Uncategorized",
-          amount: exp.amount,
+          tags: tags.length > 0 ? tags : ["Uncategorized"],
+          amount: typeof exp.amount === "number" ? exp.amount : parseFloat(exp.amount) || 0,
         };
       });
-    } else if (userId === "demo_user" || user?.email === "user@gmail.com") {
-      // Offline / dev fallback sample data for demo user
+
+      // If specific tagIds were requested and tagNames weren't provided in query, fetch tag names
+      if (tagIdsParam && tagIdsParam.length > 0 && resolvedTagNames.length === 0) {
+        const foundTags = await Tag.find({ _id: { $in: tagIdsParam } }).lean();
+        resolvedTagNames = foundTags.map((t) => t.name);
+      }
+    } else if (userId === "demo_user" || userSession?.email === "user@gmail.com") {
+      // Offline / dev fallback sample data for demo user (sorted oldest first)
       expensesData = [
-        { date: "2026-09-18", note: "Organic Market groceries", tags: "Groceries", amount: 84.5 },
-        { date: "2026-09-17", note: "Artisan espresso & pastry", tags: "Dining & Coffee", amount: 14.2 },
-        { date: "2026-09-15", note: "Fiber broadband & electricity", tags: "Housing & Bills", amount: 145.0 },
-        { date: "2026-09-12", note: "Bouldering & gym membership", tags: "Health & Gym", amount: 65.0 },
-        { date: "2026-09-08", note: "Transit metro card", tags: "Transport", amount: 32.0 },
+        { date: new Date("2026-09-08"), note: "Transit metro card", tags: ["Transport"], amount: 32.0 },
+        { date: new Date("2026-09-12"), note: "Bouldering & gym membership", tags: ["Health & Gym"], amount: 65.0 },
+        { date: new Date("2026-09-15"), note: "Fiber broadband & electricity", tags: ["Housing & Bills"], amount: 145.0 },
+        { date: new Date("2026-09-17"), note: "Artisan espresso & pastry", tags: ["Dining & Coffee"], amount: 14.2 },
+        { date: new Date("2026-09-18"), note: "Organic Market groceries", tags: ["Groceries"], amount: 84.5 },
       ];
     }
 
+    // Determine period labels
+    let startLabel = "All Time";
+    let endLabel = "All Time";
+    let startFileStr = "";
+    let endFileStr = "";
+
+    if (parsedStartDate && parsedEndDate) {
+      startLabel = formatDateDisplay(parsedStartDate);
+      endLabel = formatDateDisplay(parsedEndDate);
+      startFileStr = formatDateForFilename(parsedStartDate);
+      endFileStr = formatDateForFilename(parsedEndDate);
+    } else if (expensesData.length > 0) {
+      const earliest = expensesData[0].date;
+      const latest = expensesData[expensesData.length - 1].date;
+      startLabel = formatDateDisplay(earliest);
+      endLabel = formatDateDisplay(latest);
+      startFileStr = formatDateForFilename(earliest);
+      endFileStr = formatDateForFilename(latest);
+    } else {
+      const now = new Date();
+      startLabel = formatDateDisplay(now);
+      endLabel = formatDateDisplay(now);
+      startFileStr = formatDateForFilename(now);
+      endFileStr = formatDateForFilename(now);
+    }
+
+    // Determine tags label
+    const tagLabel =
+      resolvedTagNames.length > 0
+        ? [...resolvedTagNames].sort().join(", ")
+        : "All";
+
+    const currencyNumFmt = getExcelCurrencyFormat(userCurrency);
+
+    // ==========================================
+    // Initialize ExcelJS Workbook
+    // ==========================================
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Budget Tracker";
     workbook.created = new Date();
 
-    // Sheet 1: Expenses List
-    const sheet = workbook.addWorksheet("Expenses", {
-      views: [{ showGridLines: true }],
+    // ------------------------------------------
+    // TAB 1: Expenses
+    // ------------------------------------------
+    const expensesSheet = workbook.addWorksheet("Expenses", {
+      properties: { tabColor: { argb: "FF22C55E" } },
+      views: [{ state: "frozen", ySplit: 6, showGridLines: true }],
     });
 
-    sheet.columns = [
-      { header: "Date", key: "date", width: 14 },
-      { header: "Description", key: "note", width: 34 },
-      { header: "Categories", key: "tags", width: 22 },
-      { header: `Amount (${userCurrency})`, key: "amount", width: 16 },
+    // Row 1: Merged Title
+    expensesSheet.mergeCells("A1:D1");
+    const titleCell = expensesSheet.getCell("A1");
+    titleCell.value = "Budget Tracker — Expense Export";
+    titleCell.font = { bold: true, size: 14, color: { argb: "FF22C55E" }, name: "Calibri" };
+    titleCell.alignment = { vertical: "middle", horizontal: "left" };
+    expensesSheet.getRow(1).height = 24;
+
+    // Rows 2–4: Metadata
+    const r2 = expensesSheet.getCell("A2");
+    r2.value = `Period: ${startLabel} – ${endLabel}`;
+    r2.font = { size: 10.5, name: "Calibri", color: { argb: "FF374151" } };
+
+    const r3 = expensesSheet.getCell("A3");
+    r3.value = `Tags: ${tagLabel}`;
+    r3.font = { size: 10.5, name: "Calibri", color: { argb: "FF374151" } };
+
+    const r4 = expensesSheet.getCell("A4");
+    r4.value = `Generated: ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`;
+    r4.font = { size: 10.5, name: "Calibri", color: { argb: "FF6B7280" } };
+
+    // Row 5: Blank spacer
+    expensesSheet.getRow(5).height = 12;
+
+    // Row 6: Frozen Column Headers
+    const headerRow = expensesSheet.getRow(6);
+    headerRow.values = ["Date", "Note", "Tags", "Amount"];
+    headerRow.height = 26;
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11, name: "Calibri" };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF22C55E" } };
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+    });
+    headerRow.getCell(4).alignment = { vertical: "middle", horizontal: "right" };
+
+    // Define column widths
+    expensesSheet.columns = [
+      { key: "date", width: 16 },
+      { key: "note", width: 34 },
+      { key: "tags", width: 26 },
+      { key: "amount", width: 16 },
     ];
 
-    // Style Header Row in Emerald Theme
-    const headerRow = sheet.getRow(1);
-    headerRow.height = 28;
-    headerRow.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11, name: "Calibri" };
-    headerRow.fill = {
-      type: "pattern",
-      pattern: "solid",
-      fgColor: { argb: "FF16A34A" }, // Emerald green
-    };
-    headerRow.alignment = { vertical: "middle", horizontal: "left" };
+    // Rows 7…n: One row per expense (sorted oldest first)
+    let rowIndex = 7;
+    for (const exp of expensesData) {
+      const row = expensesSheet.getRow(rowIndex++);
+      const sortedTags = [...exp.tags].sort().join(", ");
+      row.values = [exp.date, exp.note, sortedTags, exp.amount];
+      row.height = 20;
 
-    // Add rows
-    expensesData.forEach((item) => {
-      const row = sheet.addRow(item);
-      row.height = 22;
-      row.alignment = { vertical: "middle" };
-      row.getCell("amount").numFmt = "$#,##0.00";
+      const dateCell = row.getCell(1);
+      dateCell.numFmt = "dd mmm yyyy";
+      dateCell.alignment = { vertical: "middle", horizontal: "left" };
+      dateCell.font = { size: 10.5, name: "Calibri" };
+
+      const noteCell = row.getCell(2);
+      noteCell.alignment = { vertical: "middle", horizontal: "left" };
+      noteCell.font = { size: 10.5, name: "Calibri" };
+
+      const tagCell = row.getCell(3);
+      tagCell.alignment = { vertical: "middle", horizontal: "left" };
+      tagCell.font = { size: 10.5, name: "Calibri" };
+
+      const amtCell = row.getCell(4);
+      amtCell.numFmt = currencyNumFmt;
+      amtCell.alignment = { vertical: "middle", horizontal: "right" };
+      amtCell.font = { size: 10.5, name: "Calibri" };
+    }
+
+    // AutoFilter on header row
+    expensesSheet.autoFilter = { from: "A6", to: "D6" };
+
+    // Row n+1: Blank spacer
+    expensesSheet.getRow(rowIndex).height = 12;
+
+    // Row n+2: Total row
+    const totalRowIndex = rowIndex + 1;
+    const totalRow = expensesSheet.getRow(totalRowIndex);
+    totalRow.height = 24;
+
+    totalRow.getCell(2).value = "Total";
+    totalRow.getCell(2).font = { bold: true, size: 10.5, name: "Calibri" };
+    totalRow.getCell(2).alignment = { vertical: "middle", horizontal: "left" };
+
+    const lastExpenseRow = Math.max(7, rowIndex - 1);
+    const totalAmountCell = totalRow.getCell(4);
+    totalAmountCell.value = {
+      formula: `SUM(D7:D${lastExpenseRow})`,
+      result: expensesData.reduce((sum, e) => sum + e.amount, 0),
+    };
+    totalAmountCell.font = { bold: true, size: 10.5, name: "Calibri" };
+    totalAmountCell.numFmt = currencyNumFmt;
+    totalAmountCell.alignment = { vertical: "middle", horizontal: "right" };
+    totalAmountCell.border = { top: { style: "thin" } };
+
+    // ------------------------------------------
+    // TAB 2: Summary by Tag
+    // ------------------------------------------
+    const summarySheet = workbook.addWorksheet("Summary by Tag", {
+      properties: { tabColor: { argb: "FF22C55E" } },
+      views: [{ state: "frozen", ySplit: 4, showGridLines: false }],
     });
 
-    // Summary Total Row
-    const totalRowIndex = expensesData.length + 2;
-    const totalRow = sheet.getRow(totalRowIndex);
-    totalRow.height = 24;
-    totalRow.getCell(2).value = "Total Spend";
-    totalRow.getCell(2).font = { bold: true };
-    totalRow.getCell(4).value = {
-      formula: `SUM(D2:D${totalRowIndex - 1})`,
-      result: expensesData.reduce((acc, curr) => acc + curr.amount, 0),
-    };
-    totalRow.getCell(4).font = { bold: true, color: { argb: "FF16A34A" } };
-    totalRow.getCell(4).numFmt = "$#,##0.00";
+    // Row 1: Merged Title
+    summarySheet.mergeCells("A1:D1");
+    const sumTitleCell = summarySheet.getCell("A1");
+    sumTitleCell.value = "Spend by Tag";
+    sumTitleCell.font = { bold: true, size: 14, color: { argb: "FF22C55E" }, name: "Calibri" };
+    sumTitleCell.alignment = { vertical: "middle", horizontal: "left" };
+    summarySheet.getRow(1).height = 24;
 
+    // Row 2: Period line
+    const sumPeriodCell = summarySheet.getCell("A2");
+    sumPeriodCell.value = `Period: ${startLabel} – ${endLabel}`;
+    sumPeriodCell.font = { size: 10.5, name: "Calibri", color: { argb: "FF374151" } };
+
+    // Row 3: Blank spacer
+    summarySheet.getRow(3).height = 12;
+
+    // Row 4: Column headers
+    const sumHeaderRow = summarySheet.getRow(4);
+    sumHeaderRow.values = ["Tag", "Total", "Transactions", "% of Total"];
+    sumHeaderRow.height = 26;
+    sumHeaderRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11, name: "Calibri" };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF22C55E" } };
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+    });
+    sumHeaderRow.getCell(2).alignment = { vertical: "middle", horizontal: "right" };
+    sumHeaderRow.getCell(3).alignment = { vertical: "middle", horizontal: "center" };
+    sumHeaderRow.getCell(4).alignment = { vertical: "middle", horizontal: "right" };
+
+    summarySheet.columns = [
+      { key: "tag", width: 22 },
+      { key: "total", width: 16 },
+      { key: "transactions", width: 14 },
+      { key: "pct", width: 12 },
+    ];
+
+    // Compute aggregation by tag
+    const tagAggregation = new Map<string, { total: number; count: number }>();
+    let grandTagSum = 0;
+
+    for (const exp of expensesData) {
+      for (const tag of exp.tags) {
+        const existing = tagAggregation.get(tag) || { total: 0, count: 0 };
+        existing.total += exp.amount;
+        existing.count += 1;
+        tagAggregation.set(tag, existing);
+        grandTagSum += exp.amount;
+      }
+    }
+
+    // Sort by Total descending
+    const sortedTagsList = Array.from(tagAggregation.entries())
+      .map(([tagName, stats]) => ({
+        tag: tagName,
+        total: stats.total,
+        count: stats.count,
+        pct: grandTagSum > 0 ? stats.total / grandTagSum : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
+
+    let sumRowIndex = 5;
+    const startTagRow = 5;
+
+    for (const item of sortedTagsList) {
+      const row = summarySheet.getRow(sumRowIndex++);
+      row.values = [item.tag, item.total, item.count, item.pct];
+      row.height = 20;
+
+      const tagCell = row.getCell(1);
+      tagCell.font = { size: 10.5, name: "Calibri" };
+      tagCell.alignment = { vertical: "middle", horizontal: "left" };
+
+      const totalCell = row.getCell(2);
+      totalCell.font = { size: 10.5, name: "Calibri" };
+      totalCell.numFmt = currencyNumFmt;
+      totalCell.alignment = { vertical: "middle", horizontal: "right" };
+
+      const countCell = row.getCell(3);
+      countCell.font = { size: 10.5, name: "Calibri" };
+      countCell.numFmt = "#,##0";
+      countCell.alignment = { vertical: "middle", horizontal: "center" };
+
+      const pctCell = row.getCell(4);
+      pctCell.font = { size: 10.5, name: "Calibri" };
+      pctCell.numFmt = "0.0%";
+      pctCell.alignment = { vertical: "middle", horizontal: "right" };
+    }
+
+    const lastTagRow = Math.max(startTagRow, sumRowIndex - 1);
+
+    // Row n+1: Summary Total row
+    const sumTotalRow = summarySheet.getRow(sumRowIndex);
+    sumTotalRow.height = 24;
+
+    const stTagCell = sumTotalRow.getCell(1);
+    stTagCell.value = "Total";
+    stTagCell.font = { bold: true, size: 10.5, name: "Calibri" };
+    stTagCell.alignment = { vertical: "middle", horizontal: "left" };
+
+    const stTotalCell = sumTotalRow.getCell(2);
+    stTotalCell.value = {
+      formula: `SUM(B${startTagRow}:B${lastTagRow})`,
+      result: grandTagSum,
+    };
+    stTotalCell.font = { bold: true, size: 10.5, name: "Calibri" };
+    stTotalCell.numFmt = currencyNumFmt;
+    stTotalCell.border = { top: { style: "thin" } };
+    stTotalCell.alignment = { vertical: "middle", horizontal: "right" };
+
+    const stCountCell = sumTotalRow.getCell(3);
+    stCountCell.value = {
+      formula: `SUM(C${startTagRow}:C${lastTagRow})`,
+      result: sortedTagsList.reduce((acc, curr) => acc + curr.count, 0),
+    };
+    stCountCell.font = { bold: true, size: 10.5, name: "Calibri" };
+    stCountCell.numFmt = "#,##0";
+    stCountCell.border = { top: { style: "thin" } };
+    stCountCell.alignment = { vertical: "middle", horizontal: "center" };
+
+    const stPctCell = sumTotalRow.getCell(4);
+    stPctCell.value = sortedTagsList.length > 0 ? 1 : 0;
+    stPctCell.font = { bold: true, size: 10.5, name: "Calibri" };
+    stPctCell.numFmt = "0.0%";
+    stPctCell.border = { top: { style: "thin" } };
+    stPctCell.alignment = { vertical: "middle", horizontal: "right" };
+
+    // Row n+2: Blank spacer
+    summarySheet.getRow(sumRowIndex + 1).height = 12;
+
+    // Row n+3: Footnote
+    const footnoteRowIndex = sumRowIndex + 2;
+    summarySheet.mergeCells(`A${footnoteRowIndex}:D${footnoteRowIndex}`);
+    const footnoteCell = summarySheet.getCell(`A${footnoteRowIndex}`);
+    footnoteCell.value =
+      "Expenses with more than one tag are counted under each of their tags, so this total may exceed the overall total in the Expenses tab.";
+    footnoteCell.font = { italic: true, size: 9.5, color: { argb: "FF6B7280" }, name: "Calibri" };
+    footnoteCell.alignment = { vertical: "middle", horizontal: "left" };
+
+    // Conditional format data bar on Total column
+    if (sortedTagsList.length > 0) {
+      summarySheet.addConditionalFormatting({
+        ref: `B${startTagRow}:B${lastTagRow}`,
+        rules: [
+          {
+            type: "dataBar",
+            cfvo: [{ type: "min" }, { type: "max" }],
+            color: { argb: "FF22C55E" },
+          } as any,
+        ],
+      });
+    }
+
+    // Write buffer and stream
     const buffer = await workbook.xlsx.writeBuffer();
 
-    const fileName = `budget-expenses-${new Date().toISOString().split("T")[0]}.xlsx`;
+    // File name format: budget-tracker-export-{startDate}-to-{endDate}.xlsx
+    const fileName = `budget-tracker-export-${startFileStr}-to-${endFileStr}.xlsx`;
 
     return new NextResponse(buffer, {
       headers: {
@@ -132,6 +439,9 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: unknown) {
     console.error("Excel export error:", error);
-    return NextResponse.json({ error: "Failed to generate Excel export" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to generate Excel export" },
+      { status: 500 }
+    );
   }
 }

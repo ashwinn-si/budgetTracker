@@ -7,36 +7,28 @@ import {
   Download,
   TrendingDown,
   TrendingUp,
-  Filter,
-  Calendar,
   Layers,
-  FileSpreadsheet,
   Plus,
   RefreshCw,
-  ChevronDown,
 } from "lucide-react";
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Ring } from "@/components/ui/Ring";
-import { motion } from "motion/react";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { useSync } from "@/lib/offline/useSync";
 import { useLoading } from "@/context/LoadingContext";
 import { useCurrency } from "@/context/CurrencyContext";
+import { calculatePacing } from "@/lib/analytics/pacing";
+import { SpendingActivityChart } from "@/components/dashboard/SpendingActivityChart";
+import { DateRangeFilter, PeriodPreset } from "@/components/dashboard/DateRangeFilter";
+import { TagFilter } from "@/components/dashboard/TagFilter";
+import { QuickStatChips } from "@/components/dashboard/QuickStatChips";
 
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { status, syncNow, isSyncing } = useSync();
+  const { syncNow, isSyncing } = useSync();
   const { startLoading, stopLoading } = useLoading();
   const { formatAmount, currencyInfo } = useCurrency();
 
@@ -44,8 +36,10 @@ function DashboardContent() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Read filter state from URL query parameters
-  const period = searchParams.get("period") || "month";
-  const selectedTagParam = searchParams.get("tag") || "all";
+  const periodParam = (searchParams.get("period") || "month") as PeriodPreset;
+  const customStartParam = searchParams.get("start");
+  const customEndParam = searchParams.get("end");
+  const selectedTagsParam = searchParams.get("tags")?.split(",").filter(Boolean) || [];
 
   // Live query from Dexie IndexedDB
   const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
@@ -61,16 +55,26 @@ function DashboardContent() {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
 
-    if (period === "last30") {
+    if (periodParam === "custom" && customStartParam) {
+      const start = new Date(customStartParam);
+      const end = customEndParam ? new Date(customEndParam) : new Date(customStartParam);
+      end.setHours(23, 59, 59, 999);
+      const daysDiff = Math.max(1, Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)));
+      const prevEnd = new Date(start.getTime() - 1);
+      const prevStart = new Date(start.getTime() - daysDiff * 24 * 60 * 60 * 1000);
+      return { start, end, prevStart, prevEnd };
+    }
+
+    if (periodParam === "last30") {
       const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       const prevStart = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
       return { start, end: now, prevStart, prevEnd: start };
     }
 
-    if (period === "ytd") {
+    if (periodParam === "ytd") {
       const start = new Date(currentYear, 0, 1);
       const prevStart = new Date(currentYear - 1, 0, 1);
-      const prevEnd = new Date(currentYear - 1, currentMonth, now.getDate());
+      const prevEnd = new Date(currentYear - 1, currentMonth, now.getDate(), 23, 59, 59);
       return { start, end: now, prevStart, prevEnd };
     }
 
@@ -79,7 +83,7 @@ function DashboardContent() {
     const prevStart = new Date(currentYear, currentMonth - 1, 1);
     const prevEnd = new Date(currentYear, currentMonth, 0, 23, 59, 59);
     return { start, end: now, prevStart, prevEnd };
-  }, [period]);
+  }, [periodParam, customStartParam, customEndParam]);
 
   // Filter current and previous expenses
   const { currentExpenses, prevExpenses } = useMemo(() => {
@@ -91,11 +95,10 @@ function DashboardContent() {
     allExpenses.forEach((exp) => {
       const expDate = new Date(exp.date);
 
-      // Filter by tag if selected
-      if (selectedTagParam !== "all") {
-        if (!exp.tagIds || !exp.tagIds.includes(selectedTagParam)) {
-          return;
-        }
+      // Filter by tag if tags are selected
+      if (selectedTagsParam.length > 0) {
+        const hasTag = exp.tagIds?.some((tId) => selectedTagsParam.includes(tId));
+        if (!hasTag) return;
       }
 
       if (expDate >= start && expDate <= end) {
@@ -106,7 +109,7 @@ function DashboardContent() {
     });
 
     return { currentExpenses: current, prevExpenses: prev };
-  }, [allExpenses, dateRanges, selectedTagParam]);
+  }, [allExpenses, dateRanges, selectedTagsParam]);
 
   // Calculations
   const totalSpend = useMemo(() => {
@@ -117,44 +120,16 @@ function DashboardContent() {
     return prevExpenses.reduce((sum, e) => sum + e.amount, 0);
   }, [prevExpenses]);
 
+  // Pacing Calculation
+  const pacing = useMemo(() => {
+    return calculatePacing(totalSpend, prevTotalSpend, dateRanges.start, dateRanges.end);
+  }, [totalSpend, prevTotalSpend, dateRanges]);
+
   // Percentage comparison
   const spendComparisonPercentage = useMemo(() => {
     if (prevTotalSpend <= 0) return 0;
     return Math.round(((totalSpend - prevTotalSpend) / prevTotalSpend) * 100);
   }, [totalSpend, prevTotalSpend]);
-
-  // Animated ring percentage: pacing against previous month (or 100% baseline)
-  const ringPercentage = useMemo(() => {
-    if (prevTotalSpend <= 0) return Math.min(100, Math.round((totalSpend / 1500) * 100));
-    return Math.round((totalSpend / prevTotalSpend) * 100);
-  }, [totalSpend, prevTotalSpend]);
-
-  // Trend data by day for Recharts
-  const trendData = useMemo(() => {
-    const map: Record<string, number> = {};
-
-    currentExpenses.forEach((exp) => {
-      const dayKey = exp.date.split("T")[0];
-      map[dayKey] = (map[dayKey] || 0) + exp.amount;
-    });
-
-    const sortedDates = Object.keys(map).sort();
-    if (sortedDates.length === 0) {
-      return [
-        { date: "Day 1", amount: 0 },
-        { date: "Day 15", amount: 0 },
-      ];
-    }
-
-    return sortedDates.map((d) => {
-      const parsed = new Date(d);
-      const label = parsed.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-      return {
-        date: label,
-        amount: Math.round(map[d] * 100) / 100,
-      };
-    });
-  }, [currentExpenses]);
 
   // Tag Breakdown
   const categoryBreakdown = useMemo(() => {
@@ -192,30 +167,88 @@ function DashboardContent() {
       .sort((a, b) => b.total - a.total);
   }, [currentExpenses, tagMap, totalSpend]);
 
-  const updateFilters = (newPeriod: string, newTag: string) => {
-    const params = new URLSearchParams();
-    if (newPeriod !== "month") params.set("period", newPeriod);
-    if (newTag !== "all") params.set("tag", newTag);
+  // Filter actions
+  const handleSelectPeriod = (preset: PeriodPreset, customStart?: Date, customEnd?: Date) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("period", preset);
+    if (preset === "custom" && customStart && customEnd) {
+      params.set("start", customStart.toISOString().split("T")[0]);
+      params.set("end", customEnd.toISOString().split("T")[0]);
+    } else {
+      params.delete("start");
+      params.delete("end");
+    }
     router.replace(`/dashboard?${params.toString()}`);
   };
 
+  const handleToggleTag = (tagId: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    let nextTags: string[];
+    if (selectedTagsParam.includes(tagId)) {
+      nextTags = selectedTagsParam.filter((id) => id !== tagId);
+    } else {
+      nextTags = [...selectedTagsParam, tagId];
+    }
+    if (nextTags.length > 0) {
+      params.set("tags", nextTags.join(","));
+    } else {
+      params.delete("tags");
+    }
+    router.replace(`/dashboard?${params.toString()}`);
+  };
+
+  const handleSelectAllTags = () => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("tags");
+    router.replace(`/dashboard?${params.toString()}`);
+  };
+
+  // Excel export adhering to strict 2-tab export specification
   const handleExcelExport = async () => {
     setIsExporting(true);
     startLoading();
     try {
-      const response = await fetch("/api/export/excel");
+      const startStr = dateRanges.start.toISOString().split("T")[0];
+      const endStr = dateRanges.end.toISOString().split("T")[0];
+
+      const queryParams = new URLSearchParams();
+      queryParams.set("startDate", startStr);
+      queryParams.set("endDate", endStr);
+      if (selectedTagsParam.length > 0) {
+        queryParams.set("tagIds", selectedTagsParam.join(","));
+        const names = selectedTagsParam
+          .map((id) => tagMap.get(id)?.name)
+          .filter(Boolean) as string[];
+        if (names.length > 0) {
+          queryParams.set("tagNames", names.join(","));
+        }
+      }
+
+      const response = await fetch(`/api/export/excel?${queryParams.toString()}`);
       if (!response.ok) throw new Error("Excel export failed");
+
+      // Extract filename from Content-Disposition header
+      const disposition = response.headers.get("Content-Disposition");
+      let downloadFilename = `budget-tracker-export-${startStr}-to-${endStr}.xlsx`;
+      if (disposition) {
+        const match = disposition.match(/filename="?([^";]+)"?/);
+        if (match && match[1]) {
+          downloadFilename = match[1];
+        }
+      }
+
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `budget-summary-${new Date().toISOString().split("T")[0]}.xlsx`;
+      a.download = downloadFilename;
       document.body.appendChild(a);
       a.click();
       a.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error(err);
-      alert("Failed to download Excel file. Please try again.");
+      console.error("Failed to download Excel file:", err);
+      alert("Failed to download Excel export. Please try again.");
     } finally {
       setIsExporting(false);
       stopLoading();
@@ -224,7 +257,7 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6 sm:space-y-8 pb-20 sm:pb-8">
-      {/* Header & Filter Pill Bar */}
+      {/* Header & Main Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
@@ -244,7 +277,7 @@ function DashboardContent() {
             isLoading={isExporting}
             icon={<Download className="w-4 h-4" />}
           >
-            Excel
+            Export Excel
           </Button>
 
           <Button
@@ -268,76 +301,83 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* Interactive Filter Bar */}
-      <GlassCard variant="light" className="p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3">
-        {/* Period Selector Tabs */}
-        <div className="flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/10 relative">
-          {[
-            { id: "month", label: "This Month" },
-            { id: "last30", label: "Last 30 Days" },
-            { id: "ytd", label: "Year to Date" },
-          ].map((item) => {
-            const active = period === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => updateFilters(item.id, selectedTagParam)}
-                className={`relative min-h-[36px] px-4 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150 cursor-pointer select-none ${
-                  active
-                    ? "text-white font-semibold"
-                    : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
-                }`}
-              >
-                {active && (
-                  <motion.div
-                    layoutId="activeDashboardPeriodTab"
-                    className="absolute inset-0 bg-emerald-500 rounded-xl shadow-md shadow-emerald-500/25"
-                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  />
-                )}
-                <span className="relative z-10 font-heading tracking-tight">{item.label}</span>
-              </button>
-            );
-          })}
+      {/* Filter Bar: Date Presets & Multi-Tag Selector */}
+      <GlassCard variant="light" className="p-3 sm:p-3.5 space-y-3">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <DateRangeFilter
+            period={periodParam}
+            startDate={dateRanges.start}
+            endDate={dateRanges.end}
+            onSelectPeriod={handleSelectPeriod}
+          />
+
+          <div className="text-xs text-[var(--text-muted)] hidden md:block">
+            {currentExpenses.length} transaction{currentExpenses.length === 1 ? "" : "s"} logged
+          </div>
         </div>
 
-        {/* Tag Dropdown Filter */}
-        <div className="relative group">
-          <Filter className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-emerald-500 transition-colors" />
-          <select
-            value={selectedTagParam}
-            onChange={(e) => updateFilters(period, e.target.value)}
-            className="min-h-[38px] appearance-none pl-8.5 pr-8 py-1.5 rounded-xl text-xs font-medium bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 text-[var(--text-primary)] outline-none cursor-pointer focus:ring-2 focus:ring-emerald-500/30 transition-all shadow-xs hover:bg-white/80 dark:hover:bg-black/60"
-          >
-            <option value="all">All Categories</option>
-            {allTags.map((tag) => (
-              <option key={tag._id} value={tag._id}>
-                {tag.name}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="w-3.5 h-3.5 text-[var(--text-muted)] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-[var(--text-primary)] transition-colors" />
-        </div>
+        {allTags.length > 0 && (
+          <div className="pt-2 border-t border-black/[0.04] dark:border-white/[0.06]">
+            <TagFilter
+              tags={allTags}
+              selectedTagIds={selectedTagsParam}
+              onToggleTag={handleToggleTag}
+              onSelectAll={handleSelectAllTags}
+            />
+          </div>
+        )}
       </GlassCard>
 
-      {/* Hero Section: Glass Card with Animated SVG Data Ring */}
+      {/* Quick-Stat Chips Row */}
+      <QuickStatChips
+        totalSpend={totalSpend}
+        transactionCount={currentExpenses.length}
+        largestExpense={currentExpenses.length > 0 ? Math.max(...currentExpenses.map((e) => e.amount)) : 0}
+        topCategoryName={categoryBreakdown[0]?.name || ""}
+        elapsedDays={pacing.elapsedDays}
+        currencySymbol={currencyInfo.symbol}
+      />
+
+      {/* Hero Section: Pacing Ring + Spending Activity Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Pacing Ring Card */}
         <GlassCard
           variant="strong"
           className="lg:col-span-5 flex flex-col items-center justify-center text-center p-8 relative overflow-hidden"
         >
           <span className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-2">
-            Spend Velocity vs Last Period
+            Spend Velocity vs Baseline
           </span>
 
           <div className="my-3">
-            <Ring
-              percentage={ringPercentage}
-              size={190}
-              strokeWidth={12}
-              label="Pacing"
-              sublabel={`vs ${formatAmount(prevTotalSpend)}`}
-            />
+            {!pacing.hasBaseline ? (
+              <Ring
+                percentage={0}
+                size={190}
+                strokeWidth={12}
+                centerContent={
+                  <>
+                    <span className="text-2xl sm:text-3xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
+                      {formatAmount(totalSpend)}
+                    </span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mt-1">
+                      Total Spent
+                    </span>
+                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+                      First tracked period
+                    </span>
+                  </>
+                }
+              />
+            ) : (
+              <Ring
+                percentage={pacing.pacingPercent || 0}
+                size={190}
+                strokeWidth={12}
+                label="Pacing"
+                sublabel={`vs ${formatAmount(prevTotalSpend)}`}
+              />
+            )}
           </div>
 
           <div className="mt-4 w-full pt-4 border-t border-black/5 dark:border-white/5 flex items-center justify-around">
@@ -351,88 +391,61 @@ function DashboardContent() {
             <div className="h-8 w-px bg-black/10 dark:bg-white/10" />
 
             <div>
-              <span className="text-xs text-[var(--text-muted)] block">Change</span>
-              <div
-                className={`inline-flex items-center gap-1 text-sm font-semibold mt-0.5 ${
-                  spendComparisonPercentage <= 0
-                    ? "text-emerald-600 dark:text-emerald-400"
-                    : "text-amber-600 dark:text-amber-400"
-                }`}
-              >
-                {spendComparisonPercentage <= 0 ? (
-                  <TrendingDown className="w-4 h-4" />
-                ) : (
-                  <TrendingUp className="w-4 h-4" />
-                )}
-                <span>
-                  {spendComparisonPercentage > 0 ? `+${spendComparisonPercentage}%` : `${spendComparisonPercentage}%`}
+              <span className="text-xs text-[var(--text-muted)] block">
+                {pacing.hasBaseline ? "Change" : "Baseline"}
+              </span>
+              {pacing.hasBaseline ? (
+                <div
+                  className={`inline-flex items-center gap-1 text-sm font-semibold mt-0.5 ${
+                    spendComparisonPercentage <= 0
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-amber-600 dark:text-amber-400"
+                  }`}
+                >
+                  {spendComparisonPercentage <= 0 ? (
+                    <TrendingDown className="w-4 h-4" />
+                  ) : (
+                    <TrendingUp className="w-4 h-4" />
+                  )}
+                  <span>
+                    {spendComparisonPercentage > 0
+                      ? `+${spendComparisonPercentage}%`
+                      : `${spendComparisonPercentage}%`}
+                  </span>
+                </div>
+              ) : (
+                <span className="text-xs font-medium text-[var(--text-muted)] mt-1 block">
+                  No prior period
                 </span>
-              </div>
+              )}
             </div>
           </div>
         </GlassCard>
 
-        {/* Trend Area Chart Card */}
+        {/* Spending Activity Chart Card */}
         <GlassCard variant="mid" className="lg:col-span-7 flex flex-col justify-between p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-lg font-serif-display font-medium text-[var(--text-primary)]">
                 Spending Activity
               </h2>
-              <p className="text-xs text-[var(--text-muted)]">Daily distribution across this period</p>
+              <p className="text-xs text-[var(--text-muted)]">
+                Daily distribution across this period (zero-filled)
+              </p>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-              <Calendar className="w-3.5 h-3.5" />
               <span>{currentExpenses.length} entries</span>
             </div>
           </div>
 
-          {/* Recharts Area */}
-          <div className="h-56 sm:h-64 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="emeraldGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#22C55E" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#22C55E" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <XAxis
-                  dataKey="date"
-                  stroke="rgba(122, 140, 124, 0.6)"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="rgba(122, 140, 124, 0.6)"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(val) => `${currencyInfo.symbol}${val}`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "rgba(255, 255, 255, 0.85)",
-                    backdropFilter: "blur(12px)",
-                    borderRadius: "16px",
-                    border: "1px solid rgba(255, 255, 255, 0.6)",
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-                    fontSize: "12px",
-                  }}
-                  formatter={(value: any) => [formatAmount(Number(value)), "Amount"]}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="amount"
-                  stroke="#22C55E"
-                  strokeWidth={2.5}
-                  fillOpacity={1}
-                  fill="url(#emeraldGradient)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          <SpendingActivityChart
+            expenses={currentExpenses}
+            startDate={dateRanges.start}
+            endDate={dateRanges.end}
+            currencySymbol={currencyInfo.symbol}
+            onAddExpense={() => setIsAddExpenseOpen(true)}
+            height={240}
+          />
         </GlassCard>
       </div>
 

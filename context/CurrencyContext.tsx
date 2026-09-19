@@ -3,79 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { useAuth } from "./AuthContext";
 
-export interface CurrencyInfo {
-  code: string;
-  symbol: string;
-  name: string;
-  locale: string;
-  flag: string;
-}
-
-export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
-  INR: {
-    code: "INR",
-    symbol: "₹",
-    name: "Indian Rupee",
-    locale: "en-IN",
-    flag: "🇮🇳",
-  },
-  USD: {
-    code: "USD",
-    symbol: "$",
-    name: "US Dollar",
-    locale: "en-US",
-    flag: "🇺🇸",
-  },
-  EUR: {
-    code: "EUR",
-    symbol: "€",
-    name: "Euro",
-    locale: "de-DE",
-    flag: "🇪🇺",
-  },
-  GBP: {
-    code: "GBP",
-    symbol: "£",
-    name: "British Pound",
-    locale: "en-GB",
-    flag: "🇬🇧",
-  },
-  AED: {
-    code: "AED",
-    symbol: "د.إ",
-    name: "UAE Dirham",
-    locale: "ar-AE",
-    flag: "🇦🇪",
-  },
-  CAD: {
-    code: "CAD",
-    symbol: "CA$",
-    name: "Canadian Dollar",
-    locale: "en-CA",
-    flag: "🇨🇦",
-  },
-  AUD: {
-    code: "AUD",
-    symbol: "A$",
-    name: "Australian Dollar",
-    locale: "en-AU",
-    flag: "🇦🇺",
-  },
-  JPY: {
-    code: "JPY",
-    symbol: "¥",
-    name: "Japanese Yen",
-    locale: "ja-JP",
-    flag: "🇯🇵",
-  },
-  SGD: {
-    code: "SGD",
-    symbol: "S$",
-    name: "Singapore Dollar",
-    locale: "en-SG",
-    flag: "🇸🇬",
-  },
-};
+import { SUPPORTED_CURRENCIES, type CurrencyInfo } from "@/lib/currency";
+export { SUPPORTED_CURRENCIES, type CurrencyInfo };
 
 interface CurrencyContextType {
   currency: string;
