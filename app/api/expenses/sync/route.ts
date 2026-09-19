@@ -39,62 +39,29 @@ export async function POST(req: NextRequest) {
       if (item.entity === "expense") {
         const payload = item.payload;
 
-        if (item.action === "create") {
-          // Check for existing expense by clientId (server deduplication)
-          const existing = await Expense.findOne({ clientId: item.clientId, userId });
-          if (!existing) {
-            await Expense.create({
-              userId,
-              clientId: item.clientId,
-              amount: Number(payload.amount) || 0,
-              note: (payload.note as string) || "",
-              tagIds: Array.isArray(payload.tagIds) ? payload.tagIds : [],
-              date: payload.date ? new Date(payload.date as string) : new Date(),
-              syncStatus: "synced",
-              isSaving: Boolean(payload.isSaving) || false,
-              fromSavings: Boolean(payload.fromSavings) || false,
-            });
-          } else {
-            // Conflict resolution: last-write-wins based on updatedAt
-            const serverUpdated = new Date(existing.updatedAt).getTime();
-            const clientUpdated = payload.updatedAt
-              ? new Date(payload.updatedAt as string).getTime()
-              : item.createdAt;
+        if (item.action === "create" || item.action === "update") {
+          const filter: any = item.clientId
+            ? { clientId: item.clientId, userId }
+            : { _id: payload._id, userId };
 
-            if (clientUpdated > serverUpdated) {
-              existing.amount = Number(payload.amount) || existing.amount;
-              existing.note = (payload.note as string) || existing.note;
-              existing.tagIds = Array.isArray(payload.tagIds)
-                ? (payload.tagIds as any)
-                : existing.tagIds;
-              if (payload.date) existing.date = new Date(payload.date as string);
-              existing.syncStatus = "synced";
-              existing.isSaving = Boolean(payload.isSaving) || false;
-              existing.fromSavings = Boolean(payload.fromSavings) || false;
-              await existing.save();
-            }
-          }
-          processedCount++;
-        } else if (item.action === "update") {
-          const updateFilter: any = { userId };
-          if (item.clientId) {
-            updateFilter.$or = [{ clientId: item.clientId }, { _id: payload._id }];
-          } else if (payload._id) {
-            updateFilter._id = payload._id;
-          }
-          const existing: any = await Expense.findOne(updateFilter);
-          if (existing) {
-            existing.amount = Number(payload.amount) || existing.amount;
-            existing.note = (payload.note as string) || existing.note;
-            existing.tagIds = Array.isArray(payload.tagIds)
-              ? (payload.tagIds as any)
-              : existing.tagIds;
-            if (payload.date) existing.date = new Date(payload.date as string);
-            existing.syncStatus = "synced";
-            existing.isSaving = Boolean(payload.isSaving) || false;
-            existing.fromSavings = Boolean(payload.fromSavings) || false;
-            await existing.save();
-          }
+          const updateDoc = {
+            userId,
+            clientId: item.clientId,
+            amount: Number(payload.amount) || 0,
+            note: (payload.note as string) || "",
+            tagIds: Array.isArray(payload.tagIds) ? payload.tagIds : [],
+            date: payload.date ? new Date(payload.date as string) : new Date(),
+            syncStatus: "synced",
+            isSaving: Boolean(payload.isSaving),
+            fromSavings: Boolean(payload.fromSavings),
+            ...(payload.updatedAt ? { updatedAt: new Date(payload.updatedAt as string) } : {}),
+          };
+
+          await Expense.findOneAndUpdate(
+            filter,
+            { $set: updateDoc },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
           processedCount++;
         } else if (item.action === "delete") {
           const deleteFilter: any = { userId };
@@ -110,18 +77,21 @@ export async function POST(req: NextRequest) {
         }
       } else if (item.entity === "tag") {
         const payload = item.payload;
-        if (item.action === "create") {
-          const existing = await Tag.findOne({
-            userId,
-            name: (payload.name as string)?.trim(),
-          });
-          if (!existing) {
-            await Tag.create({
-              userId,
-              name: (payload.name as string)?.trim(),
-              colorKey: (payload.colorKey as string) || "#22C55E",
-            });
-          }
+        if (item.action === "create" || item.action === "update") {
+          const filter: any = item.clientId
+            ? { _id: item.clientId, userId }
+            : { name: payload.name as string, userId };
+          await Tag.findOneAndUpdate(
+            filter,
+            {
+              $set: {
+                userId,
+                name: payload.name as string,
+                colorKey: (payload.colorKey as string) || "#22C55E",
+              },
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
+          );
           processedCount++;
         } else if (item.action === "delete") {
           await Tag.deleteOne({ _id: item.clientId, userId });

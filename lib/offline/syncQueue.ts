@@ -64,17 +64,23 @@ export async function queueTagDeletion(tagId: string) {
   });
 }
 
+let isFlushing = false;
+
 export async function flushSyncQueue(): Promise<{ success: boolean; syncedCount: number; error?: string }> {
+  if (isFlushing) {
+    return { success: true, syncedCount: 0 };
+  }
   if (typeof window === "undefined" || !navigator.onLine) {
     return { success: false, syncedCount: 0, error: "Offline" };
   }
 
-  const queueItems = await db.syncQueue.toArray();
-  if (queueItems.length === 0) {
-    return { success: true, syncedCount: 0 };
-  }
-
+  isFlushing = true;
   try {
+    const queueItems = await db.syncQueue.toArray();
+    if (queueItems.length === 0) {
+      return { success: true, syncedCount: 0 };
+    }
+
     const res = await fetch("/api/expenses/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -105,6 +111,8 @@ export async function flushSyncQueue(): Promise<{ success: boolean; syncedCount:
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Sync error";
     return { success: false, syncedCount: 0, error: message };
+  } finally {
+    isFlushing = false;
   }
 }
 
@@ -186,3 +194,9 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
     return { success: false, error: message };
   }
 }
+
+export async function clearAllLocalExpenses(): Promise<void> {
+  await db.expenses.clear();
+  await db.syncQueue.where("entity").equals("expense").delete();
+}
+

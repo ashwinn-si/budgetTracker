@@ -15,6 +15,7 @@ import {
   Coins,
   Download,
   FileDown,
+  Trash2,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -23,6 +24,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { useSync } from "@/lib/offline/useSync";
+import { clearAllLocalExpenses } from "@/lib/offline/syncQueue";
 
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
@@ -125,6 +127,28 @@ export default function ProfilePage() {
       }
     } catch {
       alert("Failed to send reset link");
+    }
+  };
+
+  const [isClearingDb, setIsClearingDb] = useState(false);
+
+  const handleClearDatabase = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to clear all expenses and savings records from both the database and this device? Categories and your user account will be preserved."
+    );
+    if (!confirmed) return;
+
+    setIsClearingDb(true);
+    try {
+      await fetch("/api/expenses/clear", { method: "POST" });
+      await clearAllLocalExpenses();
+      alert("Database cleared! All expenses and savings have been reset.");
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to clear database:", err);
+      alert("An error occurred while clearing the database.");
+    } finally {
+      setIsClearingDb(false);
     }
   };
 
@@ -535,6 +559,37 @@ export default function ProfilePage() {
                   </button>
                 </div>
               )}
+            </div>
+          </GlassCard>
+
+          {/* Database & Data Management */}
+          <GlassCard className="p-5 sm:p-6 space-y-4 border-rose-500/20 dark:border-rose-500/20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold text-[var(--text-primary)]">Data Reset</h2>
+                  <p className="text-xs text-[var(--text-secondary)]">Wipe expenses and savings data</p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+              If you want to start fresh or remove corrupted/legacy records, this will clear all expenses and savings from both the server database and this device&apos;s local storage. Categories and user accounts are preserved.
+            </p>
+
+            <div className="pt-2">
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleClearDatabase}
+                isLoading={isClearingDb}
+                className="w-full sm:w-auto"
+              >
+                Clear Expenses &amp; Savings Database
+              </Button>
             </div>
           </GlassCard>
         </div>
