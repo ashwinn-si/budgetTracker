@@ -239,10 +239,10 @@ export default function SavingsPage() {
       <GlassCard variant="light" className="p-4 space-y-3">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           {/* Tabs */}
-          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 shrink-0">
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 w-full sm:w-auto overflow-x-auto hide-scrollbar">
             <button
               onClick={() => setFilterTab("all")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 filterTab === "all"
                   ? "bg-white dark:bg-zinc-800 text-[var(--text-primary)] shadow-xs font-semibold"
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -252,7 +252,7 @@ export default function SavingsPage() {
             </button>
             <button
               onClick={() => setFilterTab("deposits")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 ${
                 filterTab === "deposits"
                   ? "bg-teal-500 text-white shadow-xs font-semibold"
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
@@ -263,7 +263,7 @@ export default function SavingsPage() {
             </button>
             <button
               onClick={() => setFilterTab("withdrawals")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0 ${
                 filterTab === "withdrawals"
                   ? "bg-amber-500 text-white shadow-xs font-semibold"
                   : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
