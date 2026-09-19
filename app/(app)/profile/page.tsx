@@ -27,7 +27,7 @@ import { useSync } from "@/lib/offline/useSync";
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
   const { theme, setTheme } = useTheme();
-  const { currency, setCurrency, formatAmount } = useCurrency();
+  const { currency, setCurrency, isDecimal, setIsDecimal, formatAmount } = useCurrency();
   const { status, pendingCount, lastSyncedAt, syncNow, isSyncing } = useSync();
 
   // Sheets sync state
@@ -253,6 +253,38 @@ export default function ProfilePage() {
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Decimal Places Setting */}
+          <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-2">
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
+                  Decimal Places
+                </label>
+                <p className="text-xs text-[var(--text-secondary)] mt-0.5">
+                  {isDecimal
+                    ? "Showing 2 decimal places (e.g. ₹20,000.00)"
+                    : "Rounded off without decimal points (e.g. ₹20,000)"}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isDecimal}
+                onClick={() => setIsDecimal(!isDecimal)}
+                className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors cursor-pointer focus:outline-none ${
+                  isDecimal ? "bg-emerald-500" : "bg-black/20 dark:bg-white/20"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-md transition-transform ${
+                    isDecimal ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
             </div>
           </div>
 

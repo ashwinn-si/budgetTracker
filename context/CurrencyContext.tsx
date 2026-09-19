@@ -10,6 +10,8 @@ interface CurrencyContextType {
   currency: string;
   currencyInfo: CurrencyInfo;
   setCurrency: (code: string) => Promise<void>;
+  isDecimal: boolean;
+  setIsDecimal: (show: boolean) => void;
   formatAmount: (amount: number | string | undefined | null, showDecimals?: boolean) => string;
 }
 
@@ -18,20 +20,28 @@ const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined
 export function CurrencyProvider({ children }: { children: React.ReactNode }) {
   const { user, updateUser } = useAuth();
   const [currency, setCurrencyState] = useState<string>("INR");
+  const [isDecimal, setIsDecimalState] = useState<boolean>(false);
 
-  // Initialize currency from user profile or localStorage on mount
+  // Initialize currency & decimal preference from user profile or localStorage on mount
   useEffect(() => {
     if (user?.currency && SUPPORTED_CURRENCIES[user.currency.toUpperCase()]) {
       setCurrencyState(user.currency.toUpperCase());
       localStorage.setItem("budget_currency", user.currency.toUpperCase());
-      return;
+    } else {
+      const saved = localStorage.getItem("budget_currency");
+      if (saved && SUPPORTED_CURRENCIES[saved.toUpperCase()]) {
+        setCurrencyState(saved.toUpperCase());
+      } else {
+        setCurrencyState("INR");
+      }
     }
 
-    const saved = localStorage.getItem("budget_currency");
-    if (saved && SUPPORTED_CURRENCIES[saved.toUpperCase()]) {
-      setCurrencyState(saved.toUpperCase());
+    // Decimal preference — default to false (rounded off, no decimal places)
+    const savedDecimals = localStorage.getItem("budget_show_decimals");
+    if (savedDecimals !== null) {
+      setIsDecimalState(savedDecimals === "true");
     } else {
-      setCurrencyState("INR");
+      setIsDecimalState(false);
     }
   }, [user?.currency]);
 
@@ -59,17 +69,26 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     [updateUser]
   );
 
+  const setIsDecimal = useCallback((val: boolean) => {
+    setIsDecimalState(val);
+    localStorage.setItem("budget_show_decimals", String(val));
+  }, []);
+
   const formatAmount = useCallback(
-    (amount: number | string | undefined | null, showDecimals = true): string => {
+    (amount: number | string | undefined | null, overrideShowDecimals?: boolean): string => {
       const num = typeof amount === "string" ? parseFloat(amount) : (amount ?? 0);
-      if (isNaN(num)) return `${currencyInfo.symbol}0.00`;
-      const formatted = num.toLocaleString(currencyInfo.locale, {
-        minimumFractionDigits: showDecimals ? 2 : 0,
-        maximumFractionDigits: showDecimals ? 2 : 0,
+      const shouldShow = overrideShowDecimals !== undefined ? overrideShowDecimals : isDecimal;
+      if (isNaN(num)) return `${currencyInfo.symbol}${shouldShow ? "0.00" : "0"}`;
+
+      const displayNum = shouldShow ? num : Math.round(num);
+
+      const formatted = displayNum.toLocaleString(currencyInfo.locale, {
+        minimumFractionDigits: shouldShow ? 2 : 0,
+        maximumFractionDigits: shouldShow ? 2 : 0,
       });
       return `${currencyInfo.symbol}${formatted}`;
     },
-    [currencyInfo]
+    [currencyInfo, isDecimal]
   );
 
   return (
@@ -78,6 +97,8 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
         currency,
         currencyInfo,
         setCurrency,
+        isDecimal,
+        setIsDecimal,
         formatAmount,
       }}
     >

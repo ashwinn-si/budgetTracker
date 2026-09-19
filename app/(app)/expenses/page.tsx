@@ -96,6 +96,9 @@ export default function ExpensesPage() {
   const filteredAndSortedExpenses = useMemo(() => {
     return allExpenses
       .filter((exp) => {
+        // Exclude pure savings deposits from the expense ledger
+        if (exp.isSaving) return false;
+
         const matchesSearch =
           !searchTerm ||
           exp.note.toLowerCase().includes(searchTerm.toLowerCase()) ||

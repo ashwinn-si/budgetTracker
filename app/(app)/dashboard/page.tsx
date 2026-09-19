@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
@@ -13,6 +14,7 @@ import {
   Tag,
   CalendarDays,
   PiggyBank,
+  ArrowRight,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -328,40 +330,54 @@ function DashboardContent() {
 
       {/* Savings Balance Banner — only shown when savings have been logged */}
       {(savingsBalance.totalSaved > 0 || savingsBalance.totalFromSavings > 0) && (
-        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 rounded-2xl border ${
-          savingsBalance.balance >= 0
-            ? "bg-teal-500/[0.07] dark:bg-teal-500/[0.1] border-teal-500/25"
-            : "bg-rose-500/[0.07] dark:bg-rose-500/[0.1] border-rose-500/25"
-        }`}>
+        <Link
+          href="/savings"
+          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 rounded-2xl border transition-all duration-200 group cursor-pointer ${
+            savingsBalance.balance >= 0
+              ? "bg-teal-500/[0.07] dark:bg-teal-500/[0.1] border-teal-500/25 hover:border-teal-500/50 hover:bg-teal-500/[0.12]"
+              : "bg-rose-500/[0.07] dark:bg-rose-500/[0.1] border-rose-500/25 hover:border-rose-500/50"
+          }`}
+        >
           <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-              savingsBalance.balance >= 0
-                ? "bg-teal-500/15 text-teal-600 dark:text-teal-400"
-                : "bg-rose-500/15 text-rose-500"
-            }`}>
+            <div
+              className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                savingsBalance.balance >= 0
+                  ? "bg-teal-500/15 text-teal-600 dark:text-teal-400 group-hover:scale-105 transition-transform"
+                  : "bg-rose-500/15 text-rose-500"
+              }`}
+            >
               <PiggyBank className="w-4.5 h-4.5" />
             </div>
             <div>
-              <p className={`text-[10px] font-bold uppercase tracking-widest ${
-                savingsBalance.balance >= 0
-                  ? "text-teal-700 dark:text-teal-400"
-                  : "text-rose-600 dark:text-rose-400"
-              }`}>
+              <p
+                className={`text-[10px] font-bold uppercase tracking-widest ${
+                  savingsBalance.balance >= 0
+                    ? "text-teal-700 dark:text-teal-400"
+                    : "text-rose-600 dark:text-rose-400"
+                }`}
+              >
                 Savings Balance
               </p>
               <p className="text-[var(--text-muted)] text-xs mt-0.5">
-                {formatAmount(savingsBalance.totalSaved)} saved &nbsp;·&nbsp; {formatAmount(savingsBalance.totalFromSavings)} withdrawn
+                {formatAmount(savingsBalance.totalSaved)} saved &nbsp;·&nbsp;{" "}
+                {formatAmount(savingsBalance.totalFromSavings)} withdrawn
               </p>
             </div>
           </div>
-          <span className={`text-2xl font-serif-display font-semibold ${
-            savingsBalance.balance >= 0
-              ? "text-teal-700 dark:text-teal-300"
-              : "text-rose-600 dark:text-rose-400"
-          }`}>
-            {savingsBalance.balance >= 0 ? "+" : ""}{formatAmount(savingsBalance.balance)}
-          </span>
-        </div>
+          <div className="flex items-center gap-3">
+            <span
+              className={`text-2xl font-serif-display font-semibold ${
+                savingsBalance.balance >= 0
+                  ? "text-teal-700 dark:text-teal-300"
+                  : "text-rose-600 dark:text-rose-400"
+              }`}
+            >
+              {savingsBalance.balance >= 0 ? "+" : ""}
+              {formatAmount(savingsBalance.balance)}
+            </span>
+            <ArrowRight className="w-4 h-4 text-teal-600 dark:text-teal-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all hidden sm:block" />
+          </div>
+        </Link>
       )}
 
       {/* Filter Bar: Date Presets & Multi-Tag Selector */}
@@ -411,66 +427,80 @@ function DashboardContent() {
           {/* 2×2 stat grid */}
           <div className="grid grid-cols-2 gap-3 flex-1">
             {/* Total Spend */}
-            <div className="flex flex-col justify-between p-4 rounded-2xl bg-emerald-500/[0.07] dark:bg-emerald-500/[0.1] border border-emerald-500/20">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Total Spend</span>
-                <div className="w-7 h-7 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+            <div className="flex flex-col justify-between p-4 rounded-2xl bg-emerald-500/[0.07] dark:bg-emerald-500/[0.1] border border-emerald-500/20 overflow-hidden">
+              <div className="flex items-center justify-between gap-1.5 mb-2.5 min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 truncate">
+                  Total Spend
+                </span>
+                <div className="w-7 h-7 rounded-xl bg-emerald-500/15 flex items-center justify-center shrink-0">
                   <Wallet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                 </div>
               </div>
-              <span className="text-2xl font-serif-display font-semibold text-[var(--text-primary)] leading-none">
+              <span
+                className="text-lg sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block"
+                title={currentExpenses.length > 0 ? formatAmount(totalSpend) : "—"}
+              >
                 {currentExpenses.length > 0 ? formatAmount(totalSpend) : "—"}
               </span>
-              <span className="text-[11px] text-[var(--text-muted)] mt-1.5">this period</span>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">this period</span>
             </div>
 
             {/* Transactions */}
-            <div className="flex flex-col justify-between p-4 rounded-2xl bg-teal-500/[0.07] dark:bg-teal-500/[0.1] border border-teal-500/20">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-teal-700 dark:text-teal-400">Transactions</span>
-                <div className="w-7 h-7 rounded-xl bg-teal-500/15 flex items-center justify-center">
+            <div className="flex flex-col justify-between p-4 rounded-2xl bg-teal-500/[0.07] dark:bg-teal-500/[0.1] border border-teal-500/20 overflow-hidden">
+              <div className="flex items-center justify-between gap-1.5 mb-2.5 min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 truncate">
+                  Transactions
+                </span>
+                <div className="w-7 h-7 rounded-xl bg-teal-500/15 flex items-center justify-center shrink-0">
                   <Receipt className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
                 </div>
               </div>
-              <span className="text-2xl font-serif-display font-semibold text-[var(--text-primary)] leading-none">
+              <span className="text-lg sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block">
                 {currentExpenses.length > 0 ? currentExpenses.length : "—"}
               </span>
-              <span className="text-[11px] text-[var(--text-muted)] mt-1.5">
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">
                 {currentExpenses.length === 1 ? "expense logged" : "expenses logged"}
               </span>
             </div>
 
             {/* Top Category */}
-            <div className="flex flex-col justify-between p-4 rounded-2xl bg-indigo-500/[0.07] dark:bg-indigo-500/[0.1] border border-indigo-500/20">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-700 dark:text-indigo-400">Top Category</span>
-                <div className="w-7 h-7 rounded-xl bg-indigo-500/15 flex items-center justify-center">
+            <div className="flex flex-col justify-between p-4 rounded-2xl bg-indigo-500/[0.07] dark:bg-indigo-500/[0.1] border border-indigo-500/20 overflow-hidden">
+              <div className="flex items-center justify-between gap-1.5 mb-2.5 min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700 dark:text-indigo-400 truncate">
+                  Top Category
+                </span>
+                <div className="w-7 h-7 rounded-xl bg-indigo-500/15 flex items-center justify-center shrink-0">
                   <Tag className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 </div>
               </div>
               <span
-                className="text-base font-serif-display font-semibold text-[var(--text-primary)] leading-snug truncate"
+                className="text-sm sm:text-base font-heading font-semibold text-[var(--text-primary)] leading-snug truncate block capitalize"
                 title={categoryBreakdown[0]?.name || "—"}
               >
                 {categoryBreakdown[0]?.name || "—"}
               </span>
-              <span className="text-[11px] text-[var(--text-muted)] mt-1.5">
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">
                 {categoryBreakdown[0] ? `${categoryBreakdown[0].percentage}% of spend` : "no data yet"}
               </span>
             </div>
 
             {/* Avg / Day */}
-            <div className="flex flex-col justify-between p-4 rounded-2xl bg-amber-500/[0.07] dark:bg-amber-500/[0.1] border border-amber-500/20">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">Avg / Day</span>
-                <div className="w-7 h-7 rounded-xl bg-amber-500/15 flex items-center justify-center">
+            <div className="flex flex-col justify-between p-4 rounded-2xl bg-amber-500/[0.07] dark:bg-amber-500/[0.1] border border-amber-500/20 overflow-hidden">
+              <div className="flex items-center justify-between gap-1.5 mb-2.5 min-w-0">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400 truncate">
+                  Avg / Day
+                </span>
+                <div className="w-7 h-7 rounded-xl bg-amber-500/15 flex items-center justify-center shrink-0">
                   <CalendarDays className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                 </div>
               </div>
-              <span className="text-2xl font-serif-display font-semibold text-[var(--text-primary)] leading-none">
+              <span
+                className="text-lg sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block"
+                title={currentExpenses.length > 0 ? formatAmount(avgPerDay) : "—"}
+              >
                 {currentExpenses.length > 0 ? formatAmount(avgPerDay) : "—"}
               </span>
-              <span className="text-[11px] text-[var(--text-muted)] mt-1.5">{elapsedDays}d elapsed</span>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">{elapsedDays}d elapsed</span>
             </div>
           </div>
         </GlassCard>

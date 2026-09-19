@@ -108,3 +108,49 @@ export function getExcelCurrencyFormat(code?: string): string {
   }
   return `${symbol}#,##0.00`;
 }
+
+/**
+ * Formats a raw numeric string with commas/grouping according to currency locale
+ * e.g., for "20000" in INR (en-IN) -> "20,000"
+ * e.g., for "200000" in INR (en-IN) -> "2,00,000"
+ * e.g., for "200000" in USD (en-US) -> "200,000"
+ * Preserves trailing decimal point or decimal digits while typing.
+ */
+export function formatAmountInput(value: string, locale: string = "en-IN"): string {
+  if (!value) return "";
+  const clean = value.replace(/[^\d.]/g, "");
+  if (!clean && value.includes(".")) return "0.";
+  if (!clean) return "";
+
+  const parts = clean.split(".");
+  const intStr = parts[0];
+  const hasDot = clean.includes(".");
+  const decStr = parts.length > 1 ? parts.slice(1).join("").slice(0, 2) : "";
+
+  let formattedInt = "";
+  if (intStr) {
+    try {
+      formattedInt = new Intl.NumberFormat(locale).format(BigInt(intStr));
+    } catch {
+      formattedInt = intStr;
+    }
+  } else if (hasDot) {
+    formattedInt = "0";
+  }
+
+  if (hasDot) {
+    return `${formattedInt}.${decStr}`;
+  }
+  return formattedInt;
+}
+
+/**
+ * Strips formatting (commas, spaces) to parse the clean numeric value
+ */
+export function parseAmountInput(value: string): number {
+  if (!value) return 0;
+  const clean = value.replace(/[^\d.]/g, "");
+  const num = parseFloat(clean);
+  return isNaN(num) ? 0 : num;
+}
+

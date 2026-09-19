@@ -21,6 +21,7 @@ import { db, LocalExpense, LocalTag } from "@/lib/offline/db";
 import { queueExpenseCreation, queueExpenseUpdate, queueTagCreation } from "@/lib/offline/syncQueue";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
+import { formatAmountInput, parseAmountInput } from "@/lib/currency";
 
 const PRESET_TAG_COLORS = [
   "#22C55E", // Emerald
@@ -83,9 +84,11 @@ export function ExpenseFormModal({
     return saved - withdrawn;
   }, [allExpenses]);
 
+  const amountInputRef = React.useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     if (initialExpense) {
-      setAmount(initialExpense.amount.toString());
+      setAmount(formatAmountInput(initialExpense.amount.toString(), currencyInfo.locale));
       setNote(initialExpense.note || "");
       setDate(initialExpense.date ? initialExpense.date.split("T")[0] : new Date().toISOString().split("T")[0]);
       setSelectedTagIds(initialExpense.tagIds || []);
@@ -98,7 +101,65 @@ export function ExpenseFormModal({
       setFromSavings(false);
     }
     setTagSearchQuery("");
-  }, [initialExpense, isOpen]);
+  }, [initialExpense, isOpen, currencyInfo.locale]);
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const input = e.target;
+    const rawValue = input.value;
+    const cursor = input.selectionStart || 0;
+
+    // Count how many non-separator characters (digits and dot) were before cursor
+    const rawBeforeCursor = rawValue.slice(0, cursor);
+    const digitsBeforeCursor = rawBeforeCursor.replace(/[^\d.]/g, "").length;
+
+    const formatted = formatAmountInput(rawValue, currencyInfo.locale);
+    setAmount(formatted);
+
+    // Restore cursor position matching the digit count
+    requestAnimationFrame(() => {
+      if (!amountInputRef.current) return;
+      let newCursor = formatted.length;
+      let count = 0;
+      for (let i = 0; i < formatted.length; i++) {
+        if (/[\d.]/.test(formatted[i])) {
+          count++;
+        }
+        if (count >= digitsBeforeCursor) {
+          newCursor = i + 1;
+          break;
+        }
+      }
+      amountInputRef.current.setSelectionRange(newCursor, newCursor);
+    });
+  };
+
+  const handleAmountKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    if (e.key === "Backspace" && input.selectionStart === input.selectionEnd) {
+      const pos = input.selectionStart ?? 0;
+      if (pos > 0 && input.value[pos - 1] === ",") {
+        e.preventDefault();
+        const val = input.value;
+        const updated = val.slice(0, pos - 2) + val.slice(pos - 1);
+        const formatted = formatAmountInput(updated, currencyInfo.locale);
+        setAmount(formatted);
+        const digitsLeft = val.slice(0, pos - 2).replace(/[^\d.]/g, "").length;
+        requestAnimationFrame(() => {
+          if (!amountInputRef.current) return;
+          let newPos = 0;
+          let count = 0;
+          for (let i = 0; i < formatted.length; i++) {
+            if (/[\d.]/.test(formatted[i])) count++;
+            if (count === digitsLeft) {
+              newPos = i + 1;
+              break;
+            }
+          }
+          amountInputRef.current.setSelectionRange(newPos, newPos);
+        });
+      }
+    }
+  };
 
   // When editing, pre-fill saving flags
   useEffect(() => {
@@ -159,7 +220,7 @@ export function ExpenseFormModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const parsedAmount = parseFloat(amount);
+    const parsedAmount = parseAmountInput(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       alert("Please enter a valid amount greater than 0");
       return;
@@ -193,7 +254,6 @@ export function ExpenseFormModal({
           createdAt: now,
           updatedAt: now,
           syncStatus: "pending",
-          isSaving: isSaving || undefined,
           fromSavings: fromSavings || undefined,
         };
         await queueExpenseCreation(newExpense);
@@ -258,15 +318,16 @@ export function ExpenseFormModal({
               {currencyInfo.symbol}
             </span>
             <input
-              type="number"
-              step="0.01"
-              min="0.01"
+              ref={amountInputRef}
+              type="text"
+              inputMode="decimal"
               placeholder="0.00"
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={handleAmountChange}
+              onKeyDown={handleAmountKeyDown}
               required
               autoFocus
-              className="w-full text-3xl sm:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              className="w-full text-3xl sm:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
             />
           </div>
         </div>
@@ -404,93 +465,53 @@ export function ExpenseFormModal({
           </div>
         </div>
 
-        {/* Saving / From Savings Toggles */}
+        {/* Paid from Savings Toggle */}
         <div className="space-y-2">
           <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-            <PiggyBank className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span>Savings</span>
+            <PiggyBank className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <span>Savings Fund</span>
           </label>
 
-          <div className="grid grid-cols-2 gap-2">
-            {/* Adding to savings card */}
-            <button
-              type="button"
-              onClick={() => { setIsSaving(!isSaving); if (!isSaving) setFromSavings(false); }}
-              className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                isSaving
-                  ? "bg-teal-500/10 border-teal-500/50 dark:bg-teal-500/15 dark:border-teal-400/40"
-                  : "bg-white/50 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 hover:border-teal-400/40 hover:bg-teal-50/50 dark:hover:bg-teal-500/8"
-              }`}
-            >
-              <div className="flex items-center justify-between w-full">
-                <div className={`w-7 h-7 rounded-xl flex items-center justify-center ${
-                  isSaving ? "bg-teal-500 text-white" : "bg-teal-500/10 text-teal-600 dark:text-teal-400"
-                }`}>
-                  <PiggyBank className="w-3.5 h-3.5" />
-                </div>
-                {isSaving && (
-                  <div className="w-4 h-4 rounded-full bg-teal-500 flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
-                  </div>
-                )}
-              </div>
-              <span className={`text-xs font-semibold leading-tight ${
-                isSaving ? "text-teal-700 dark:text-teal-300" : "text-[var(--text-primary)]"
-              }`}>Adding to savings</span>
-              <span className="text-[10px] text-[var(--text-muted)] leading-tight">
-                Amount goes into your savings balance
-              </span>
-            </button>
-
-            {/* From Savings card */}
-            <button
-              type="button"
-              onClick={() => { setFromSavings(!fromSavings); if (!fromSavings) setIsSaving(false); }}
-              className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
-                fromSavings
-                  ? "bg-amber-500/10 border-amber-500/50 dark:bg-amber-500/15 dark:border-amber-400/40"
-                  : "bg-white/50 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-500/8"
-              }`}
-            >
-              <div className="flex items-center justify-between w-full">
-                <div className={`w-7 h-7 rounded-xl flex items-center justify-center ${
-                  fromSavings ? "bg-amber-500 text-white" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                }`}>
-                  <ArrowDownLeft className="w-3.5 h-3.5" />
-                </div>
-                {fromSavings && (
-                  <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
-                    <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
-                  </div>
-                )}
-              </div>
-              <span className={`text-xs font-semibold leading-tight ${
-                fromSavings ? "text-amber-700 dark:text-amber-300" : "text-[var(--text-primary)]"
-              }`}>From savings</span>
-              <span className="text-[10px] text-[var(--text-muted)] leading-tight">
-                Paid out of your savings balance
-              </span>
-            </button>
-          </div>
-
-          {/* Live savings balance — shown when a toggle is active */}
-          {(isSaving || fromSavings) && (
-            <div className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border ${
-              savingsBalance >= 0
-                ? "bg-teal-500/[0.06] border-teal-500/20"
-                : "bg-rose-500/[0.06] border-rose-500/20"
-            }`}>
-              <div className="flex items-center gap-2">
-                <PiggyBank className={`w-3.5 h-3.5 ${savingsBalance >= 0 ? "text-teal-600 dark:text-teal-400" : "text-rose-500"}`} />
-                <span className="text-[11px] text-[var(--text-muted)]">Current savings balance</span>
-              </div>
-              <span className={`text-sm font-semibold font-serif-display ${
-                savingsBalance >= 0 ? "text-teal-700 dark:text-teal-300" : "text-rose-600 dark:text-rose-400"
+          <button
+            type="button"
+            onClick={() => setFromSavings(!fromSavings)}
+            className={`w-full flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+              fromSavings
+                ? "bg-amber-500/10 border-amber-500/50 dark:bg-amber-500/15 dark:border-amber-400/40 shadow-xs"
+                : "bg-white/50 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-500/8"
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                fromSavings ? "bg-amber-500 text-white" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
               }`}>
-                {savingsBalance >= 0 ? "+" : ""}{currencyInfo.symbol}{Math.abs(savingsBalance).toLocaleString()}
-              </span>
+                <ArrowDownLeft className="w-4 h-4" />
+              </div>
+              <div>
+                <span className={`text-xs font-semibold block ${
+                  fromSavings ? "text-amber-700 dark:text-amber-300" : "text-[var(--text-primary)]"
+                }`}>
+                  Paid from savings
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)]">
+                  Deduct this expense from your reserve balance
+                </span>
+              </div>
             </div>
-          )}
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-medium text-[var(--text-muted)]">
+                Available: {currencyInfo.symbol}{Math.max(0, savingsBalance).toLocaleString()}
+              </span>
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+                fromSavings
+                  ? "bg-amber-500 border-amber-500 text-white"
+                  : "border-black/20 dark:border-white/20 bg-transparent"
+              }`}>
+                {fromSavings && <Check className="w-3 h-3 stroke-[3]" />}
+              </div>
+            </div>
+          </button>
         </div>
       </form>
     </Modal>

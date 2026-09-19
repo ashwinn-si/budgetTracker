@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, ReceiptText, Tags, User, Plus } from "lucide-react";
+import { LayoutDashboard, ReceiptText, PiggyBank, User, Plus } from "lucide-react";
 
 interface BottomNavProps {
   onOpenAddExpense?: () => void;
@@ -52,17 +52,17 @@ export function BottomNav({ onOpenAddExpense }: BottomNavProps) {
           </button>
         </div>
 
-        {/* 4. Tags */}
+        {/* 4. Savings (replaces Tags) */}
         <Link
-          href="/tags"
+          href="/savings"
           className={`flex flex-col items-center justify-center min-h-[44px] transition-colors ${
-            pathname.startsWith("/tags")
+            pathname.startsWith("/savings")
               ? "text-emerald-600 dark:text-emerald-400 font-medium"
               : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
           }`}
         >
-          <Tags className="w-5 h-5" />
-          <span className="text-[10px] mt-0.5">Tags</span>
+          <PiggyBank className="w-5 h-5" />
+          <span className="text-[10px] mt-0.5">Savings</span>
         </Link>
 
         {/* 5. Profile */}
