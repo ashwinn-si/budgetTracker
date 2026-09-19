@@ -165,7 +165,7 @@ export default function TagsPage() {
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {/* Total Categories */}
-        <div className="p-5 rounded-3xl glass-card border border-white/60 dark:border-white/10 shadow-xs flex items-center gap-4">
+        <div className="p-5 rounded-3xl glass-card bg-white/80 dark:bg-white/[0.04] border border-white/80 dark:border-white/10 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
             <TagsIcon className="w-6 h-6" />
           </div>
@@ -180,7 +180,7 @@ export default function TagsPage() {
         </div>
 
         {/* Most Active Category */}
-        <div className="p-5 rounded-3xl glass-card border border-white/60 dark:border-white/10 shadow-xs flex items-center gap-4">
+        <div className="p-5 rounded-3xl glass-card bg-white/80 dark:bg-white/[0.04] border border-white/80 dark:border-white/10 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
             <TrendingUp className="w-6 h-6" />
           </div>
@@ -195,7 +195,7 @@ export default function TagsPage() {
         </div>
 
         {/* Total Expenses Tagged */}
-        <div className="p-5 rounded-3xl glass-card border border-white/60 dark:border-white/10 shadow-xs flex items-center gap-4">
+        <div className="p-5 rounded-3xl glass-card bg-white/80 dark:bg-white/[0.04] border border-white/80 dark:border-white/10 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
             <ReceiptText className="w-6 h-6" />
           </div>
@@ -312,7 +312,7 @@ export default function TagsPage() {
 
       {/* Grid of Categories */}
       {allTags.length === 0 ? (
-        <div className="p-12 text-center rounded-3xl glass-card border border-white/60 dark:border-white/10 space-y-3">
+        <div className="p-12 text-center rounded-3xl glass-card bg-white/80 dark:bg-white/[0.04] border border-white/80 dark:border-white/10 shadow-xs space-y-3">
           <FolderOpen className="w-12 h-12 text-[var(--text-muted)] mx-auto opacity-50" />
           <h3 className="text-base font-semibold font-heading text-[var(--text-primary)]">
             No categories defined yet
@@ -338,7 +338,7 @@ export default function TagsPage() {
             return (
               <div
                 key={tag._id}
-                className="p-5 rounded-3xl glass-card border border-white/60 dark:border-white/10 shadow-xs hover:border-emerald-500/40 transition-all flex flex-col justify-between gap-4 group"
+                className="p-5 rounded-3xl glass-card bg-white/80 dark:bg-white/[0.04] border border-white/80 dark:border-white/10 shadow-xs hover:bg-white/95 dark:hover:bg-white/[0.08] hover:border-emerald-500/40 hover:shadow-md transition-all flex flex-col justify-between gap-4 group"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
