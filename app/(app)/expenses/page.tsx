@@ -149,7 +149,7 @@ export default function ExpensesPage() {
           variant="primary"
           onClick={handleNew}
           icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
-          className="shadow-emerald-500/20 shadow-lg"
+          className="hidden sm:inline-flex shadow-emerald-500/20 shadow-lg"
         >
           Add Expense
         </Button>

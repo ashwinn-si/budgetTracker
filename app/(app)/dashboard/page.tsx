@@ -268,7 +268,7 @@ function DashboardContent() {
   return (
     <div className="space-y-6 sm:space-y-8 pb-20 sm:pb-8">
       {/* Header & Main Actions */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
         <div>
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             Overview & Spend Analytics
@@ -279,13 +279,14 @@ function DashboardContent() {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5">
+        <div className="flex items-center gap-2 sm:gap-2.5 w-full sm:w-auto">
           <Button
             variant="ghost"
             size="sm"
             onClick={handleExcelExport}
             isLoading={isExporting}
             icon={<Download className="w-4 h-4" />}
+            className="flex-1 sm:flex-initial text-xs sm:text-sm"
           >
             Export Excel
           </Button>
@@ -296,6 +297,7 @@ function DashboardContent() {
             onClick={() => syncNow()}
             isLoading={isSyncing}
             icon={<RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin text-emerald-500" : ""}`} />}
+            className="flex-1 sm:flex-initial text-xs sm:text-sm"
           >
             Sync
           </Button>
@@ -305,6 +307,7 @@ function DashboardContent() {
             size="sm"
             onClick={() => setIsAddExpenseOpen(true)}
             icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+            className="hidden sm:inline-flex shadow-emerald-500/20 shadow-lg"
           >
             Add Expense
           </Button>
