@@ -1,14 +1,37 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { Plus, Check, Tag as TagIcon, Calendar, DollarSign, FileText } from "lucide-react";
+import {
+  Plus,
+  Check,
+  Tag as TagIcon,
+  Calendar,
+  DollarSign,
+  FileText,
+  Search,
+  Sparkles,
+  X,
+} from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { db, LocalExpense, LocalTag } from "@/lib/offline/db";
 import { queueExpenseCreation, queueExpenseUpdate, queueTagCreation } from "@/lib/offline/syncQueue";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
+
+const PRESET_TAG_COLORS = [
+  "#22C55E", // Emerald
+  "#3B82F6", // Blue
+  "#F59E0B", // Amber
+  "#EC4899", // Pink
+  "#8B5CF6", // Purple
+  "#14B8A6", // Teal
+  "#06B6D4", // Cyan
+  "#F43F5E", // Rose
+  "#6366F1", // Indigo
+  "#F97316", // Orange
+];
 
 interface ExpenseFormModalProps {
   isOpen: boolean;
@@ -32,10 +55,8 @@ export function ExpenseFormModal({
   const [date, setDate] = useState<string>(new Date().toISOString().split("T")[0]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
 
-  // Inline new tag creation state
-  const [isCreatingTag, setIsCreatingTag] = useState<boolean>(false);
-  const [newTagName, setNewTagName] = useState<string>("");
-  const [newTagColor, setNewTagColor] = useState<string>("#22C55E");
+  // Search or quick-create category query
+  const [tagSearchQuery, setTagSearchQuery] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   // Live tags from Dexie
@@ -53,8 +74,7 @@ export function ExpenseFormModal({
       setDate(new Date().toISOString().split("T")[0]);
       setSelectedTagIds([]);
     }
-    setIsCreatingTag(false);
-    setNewTagName("");
+    setTagSearchQuery("");
   }, [initialExpense, isOpen]);
 
   const toggleTag = (tagId: string) => {
@@ -63,21 +83,47 @@ export function ExpenseFormModal({
     );
   };
 
-  const handleCreateTag = async () => {
-    if (!newTagName.trim()) return;
-    const tagId = `tag_${Date.now()}`;
+  // Filter tags dynamically as user types
+  const filteredTags = useMemo(() => {
+    const q = tagSearchQuery.trim().toLowerCase();
+    if (!q) return tags;
+    return tags.filter((t) => t.name.toLowerCase().includes(q));
+  }, [tags, tagSearchQuery]);
+
+  // Check if what is typed already exists
+  const exactMatchExists = useMemo(() => {
+    const q = tagSearchQuery.trim().toLowerCase();
+    if (!q) return true;
+    return tags.some((t) => t.name.toLowerCase() === q);
+  }, [tags, tagSearchQuery]);
+
+  // Quick create category on the fly without confusing color subforms
+  const handleQuickCreateTag = async (nameToCreate?: string) => {
+    const name = (nameToCreate || tagSearchQuery).trim();
+    if (!name) return;
+
+    // Check if tag already exists (case-insensitive)
+    const existing = tags.find((t) => t.name.toLowerCase() === name.toLowerCase());
+    if (existing) {
+      if (!selectedTagIds.includes(existing._id)) {
+        setSelectedTagIds((prev) => [...prev, existing._id]);
+      }
+      setTagSearchQuery("");
+      return;
+    }
+
+    const randomColor = PRESET_TAG_COLORS[Math.floor(Math.random() * PRESET_TAG_COLORS.length)];
+    const tagId = `tag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const newTag: LocalTag = {
       _id: tagId,
       userId,
-      name: newTagName.trim(),
-      colorKey: newTagColor,
-      createdAt: new Date().toISOString(),
+      name,
+      colorKey: randomColor,
     };
 
     await queueTagCreation(newTag);
     setSelectedTagIds((prev) => [...prev, tagId]);
-    setNewTagName("");
-    setIsCreatingTag(false);
+    setTagSearchQuery("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -221,94 +267,105 @@ export function ExpenseFormModal({
           </div>
         </div>
 
-        {/* Categories / Tags Multi-select */}
-        <div className="space-y-2">
+        {/* Categories / Tags Section */}
+        <div className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-              <TagIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span>Tags (Multi-select)</span>
-            </label>
-            {!isCreatingTag && (
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
+                <TagIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Categories</span>
+              </label>
+              {selectedTagIds.length > 0 && (
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                  {selectedTagIds.length} selected
+                </span>
+              )}
+            </div>
+
+            {selectedTagIds.length > 0 && (
               <button
                 type="button"
-                onClick={() => setIsCreatingTag(true)}
-                className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-1 min-h-[32px] px-2 py-1 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/15 transition-all cursor-pointer"
+                onClick={() => setSelectedTagIds([])}
+                className="text-[11px] font-medium text-[var(--text-muted)] hover:text-rose-500 transition-colors cursor-pointer"
               >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>New Tag</span>
+                Clear all
               </button>
             )}
           </div>
 
-          {/* Inline Create Tag form */}
-          {isCreatingTag && (
-            <div className="p-4 rounded-2xl bg-emerald-500/[0.07] border border-emerald-500/30 space-y-3">
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="New tag name (e.g. Subscriptions)"
-                  value={newTagName}
-                  onChange={(e) => setNewTagName(e.target.value)}
-                  className="flex-1 px-3.5 py-2 text-xs rounded-xl bg-white/90 dark:bg-black/40 border border-emerald-500/30 outline-none text-[var(--text-primary)] focus:ring-2 focus:ring-emerald-500/40"
-                />
-                <button
-                  type="button"
-                  onClick={handleCreateTag}
-                  className="px-4 py-2 text-xs font-semibold bg-emerald-500 text-white rounded-xl hover:bg-emerald-600 active:scale-95 transition-all shadow-xs cursor-pointer"
-                >
-                  Add
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingTag(false)}
-                  className="px-2.5 py-2 text-xs font-medium text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-                >
-                  Cancel
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-medium text-[var(--text-muted)]">Color:</span>
-                <div className="flex items-center gap-1.5">
-                  {colorPalette.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setNewTagColor(c)}
-                      className={`w-6 h-6 rounded-full transition-all cursor-pointer ${
-                        newTagColor === c ? "scale-125 ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-black" : "opacity-80 hover:opacity-100"
-                      }`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Quick Tag Search / Create Combobox Bar */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Find or type a new category..."
+              value={tagSearchQuery}
+              onChange={(e) => setTagSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (!exactMatchExists) {
+                    handleQuickCreateTag();
+                  }
+                }
+              }}
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white/70 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/60 outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all shadow-xs"
+            />
+            {tagSearchQuery && (
+              <button
+                type="button"
+                onClick={() => setTagSearchQuery("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] p-0.5 rounded-md cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
 
-          {/* Tag Chips */}
-          <div className="flex flex-wrap gap-2 pt-1 max-h-36 overflow-y-auto">
-            {tags.map((tag) => {
+          {/* Tag Pills & Create Action */}
+          <div className="flex flex-wrap gap-1.5 pt-0.5 max-h-36 overflow-y-auto pr-1">
+            {/* If query has no exact match, show instant creation badge! */}
+            {!exactMatchExists && tagSearchQuery.trim() && (
+              <button
+                type="button"
+                onClick={() => handleQuickCreateTag()}
+                className="min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1.5 shadow-md shadow-emerald-500/25 transition-all cursor-pointer animate-pulse"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Create &quot;{tagSearchQuery.trim()}&quot;</span>
+              </button>
+            )}
+
+            {filteredTags.map((tag) => {
               const isSelected = selectedTagIds.includes(tag._id);
+              const color = tag.colorKey || "#22C55E";
+
               return (
                 <button
                   key={tag._id}
                   type="button"
                   onClick={() => toggleTag(tag._id)}
-                  className={`min-h-[38px] px-4 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer select-none ${
+                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer select-none ${
                     isSelected
-                      ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold shadow-sm shadow-emerald-500/30 border border-transparent"
+                      ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold shadow-sm shadow-emerald-500/30 border border-transparent scale-[1.02]"
                       : "bg-white/70 dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/10 text-[var(--text-secondary)] hover:bg-white dark:hover:bg-white/10 hover:border-emerald-500/40 shadow-2xs"
                   }`}
                 >
                   <span
-                    className="w-2.5 h-2.5 rounded-full ring-2 ring-white/60 dark:ring-black/40 shrink-0"
-                    style={{ backgroundColor: tag.colorKey }}
+                    className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10 dark:ring-white/20"
+                    style={{ backgroundColor: color }}
                   />
                   <span>{tag.name}</span>
                   {isSelected && <Check className="w-3.5 h-3.5 ml-0.5 stroke-[2.5]" />}
                 </button>
               );
             })}
+
+            {filteredTags.length === 0 && exactMatchExists && (
+              <p className="text-xs text-[var(--text-muted)] py-2 italic">
+                No matching categories found.
+              </p>
+            )}
           </div>
         </div>
       </form>
