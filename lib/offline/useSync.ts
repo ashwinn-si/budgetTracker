@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, seedInitialDataIfEmpty } from "./db";
-import { flushSyncQueue } from "./syncQueue";
+import { flushSyncQueue, pullFromServer } from "./syncQueue";
 
 export type SyncState = "synced" | "syncing" | "pending" | "offline";
 
@@ -34,7 +34,7 @@ export function useSync() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Initial check & seed
+    // Initial check tags & sync
     seedInitialDataIfEmpty().then(() => {
       triggerSync();
     });
@@ -56,6 +56,7 @@ export function useSync() {
     setIsSyncing(true);
     try {
       const result = await flushSyncQueue();
+      await pullFromServer();
       if (result.success) {
         const now = new Date();
         setLastSyncedAt(now);

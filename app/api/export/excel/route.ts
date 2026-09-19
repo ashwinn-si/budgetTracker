@@ -60,8 +60,8 @@ export async function GET(req: NextRequest) {
           amount: exp.amount,
         };
       });
-    } else {
-      // Offline / dev fallback sample data for instant excel export testing
+    } else if (userId === "demo_user" || user?.email === "user@gmail.com") {
+      // Offline / dev fallback sample data for demo user
       expensesData = [
         { date: "2026-09-18", note: "Organic Market groceries", tags: "Groceries", amount: 84.5 },
         { date: "2026-09-17", note: "Artisan espresso & pastry", tags: "Dining & Coffee", amount: 14.2 },

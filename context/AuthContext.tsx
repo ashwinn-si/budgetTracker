@@ -1,6 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { clearLocalUserData, seedDemoExpensesForUser, db } from "@/lib/offline/db";
+import { pullFromServer } from "@/lib/offline/syncQueue";
 
 export interface AuthUser {
   id: string;
@@ -28,6 +30,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Helper to handle user session initialization and storage isolation
+  const handleUserSession = useCallback(async (newUser: AuthUser) => {
+    const previousUserId = localStorage.getItem("budget_active_user_id");
+    if (previousUserId && previousUserId !== newUser.id) {
+      // Switched account: wipe previous user's cached offline data
+      await clearLocalUserData();
+    }
+    localStorage.setItem("budget_active_user_id", newUser.id);
+    localStorage.setItem("budget_local_user", JSON.stringify(newUser));
+
+    // If demo user (user@gmail.com), ensure demo expenses exist in local Dexie
+    if (newUser.email.toLowerCase() === "user@gmail.com") {
+      const expCount = await db.expenses.count();
+      if (expCount === 0) {
+        await seedDemoExpensesForUser(newUser.id);
+      }
+    }
+
+    // Pull real user transactions from server
+    await pullFromServer();
+  }, []);
+
   // Silent auto-login via access/refresh tokens on app load
   useEffect(() => {
     const silentRefresh = async () => {
@@ -37,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const data = await res.json();
           setUser(data.user);
           setAccessToken(data.accessToken);
-          localStorage.setItem("budget_local_user", JSON.stringify(data.user));
+          await handleUserSession(data.user);
         } else {
           setUser(null);
           setAccessToken(null);
@@ -53,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     silentRefresh();
-  }, []);
+  }, [handleUserSession]);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -68,12 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(data.user);
       setAccessToken(data.accessToken);
-      localStorage.setItem("budget_local_user", JSON.stringify(data.user));
+      await handleUserSession(data.user);
       return { success: true };
     } catch {
       return { success: false, error: "Network error during login" };
     }
-  }, []);
+  }, [handleUserSession]);
 
   const register = useCallback(async (name: string, email: string, password: string) => {
     try {
@@ -88,12 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(data.user);
       setAccessToken(data.accessToken);
-      localStorage.setItem("budget_local_user", JSON.stringify(data.user));
+      await handleUserSession(data.user);
       return { success: true };
     } catch {
       return { success: false, error: "Network error during registration" };
     }
-  }, []);
+  }, [handleUserSession]);
 
   const logout = useCallback(async () => {
     try {
@@ -101,9 +125,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // Ignore network errors on logout
     }
+    // Clear in-memory state
     setUser(null);
     setAccessToken(null);
+
+    // Clear local storage and IndexedDB to avoid leaking data to another user
     localStorage.removeItem("budget_local_user");
+    localStorage.removeItem("budget_active_user_id");
+    localStorage.removeItem("budget_last_synced");
+    await clearLocalUserData();
+
     try {
       const { signOut } = await import("next-auth/react");
       await signOut({ redirect: false });

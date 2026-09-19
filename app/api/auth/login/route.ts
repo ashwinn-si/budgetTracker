@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models/User";
 import { createAndStoreRefreshToken } from "@/lib/auth";
+import { DEMO_USER_EMAIL, DEMO_USER_PASSWORD, ensureDemoUserSeeded } from "@/lib/demoUser";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,15 +17,32 @@ export async function POST(req: NextRequest) {
     }
 
     const db = await connectToDatabase();
+
+    const isDemoLogin =
+      email.toLowerCase() === DEMO_USER_EMAIL.toLowerCase() &&
+      password === DEMO_USER_PASSWORD;
+
     if (!db) {
       // Local/offline mock user
+      if (isDemoLogin) {
+        return NextResponse.json({
+          user: { id: "demo_user", name: "Demo User", email: DEMO_USER_EMAIL, currency: "USD" },
+          accessToken: "demo_dev_token",
+        });
+      }
       return NextResponse.json({
         user: { id: "local_user", name: "Local User", email },
         accessToken: "local_dev_token",
       });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let user: any = await User.findOne({ email: email.toLowerCase() });
+    if (isDemoLogin) {
+      // Auto-ensure demo user exists
+      user = await ensureDemoUserSeeded();
+    }
+
     if (!user || !user.passwordHash) {
       return NextResponse.json(
         { error: "Invalid email or password." },

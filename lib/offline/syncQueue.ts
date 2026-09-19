@@ -107,3 +107,79 @@ export async function flushSyncQueue(): Promise<{ success: boolean; syncedCount:
     return { success: false, syncedCount: 0, error: message };
   }
 }
+
+export async function pullFromServer(): Promise<{ success: boolean; error?: string }> {
+  if (typeof window === "undefined" || !navigator.onLine) {
+    return { success: false, error: "Offline" };
+  }
+
+  try {
+    // 1. Pull tags
+    const tagsRes = await fetch("/api/tags");
+    if (tagsRes.ok) {
+      const tagsData = await tagsRes.json();
+      if (Array.isArray(tagsData.tags) && tagsData.tags.length > 0) {
+        const localTags: LocalTag[] = tagsData.tags.map((t: any) => ({
+          _id: t._id?.toString(),
+          userId: t.userId || "local_user",
+          name: t.name,
+          colorKey: t.colorKey || "#22C55E",
+        }));
+        await db.tags.bulkPut(localTags);
+      }
+    }
+
+    // 2. Pull expenses
+    const expRes = await fetch("/api/expenses");
+    if (expRes.ok) {
+      const expData = await expRes.json();
+      if (Array.isArray(expData.expenses)) {
+        const pendingItems = await db.syncQueue.toArray();
+        const pendingClientIds = new Set(pendingItems.map((p) => p.clientId));
+        const serverClientIds = new Set<string>();
+
+        for (const sExp of expData.expenses) {
+          const clientId = sExp.clientId || sExp._id?.toString();
+          serverClientIds.add(clientId);
+
+          if (!pendingClientIds.has(clientId)) {
+            const localExp: LocalExpense = {
+              clientId,
+              userId: sExp.userId,
+              amount: Number(sExp.amount) || 0,
+              note: sExp.note || "",
+              tagIds: Array.isArray(sExp.tagIds)
+                ? sExp.tagIds.map((t: any) => (typeof t === "object" ? t._id?.toString() : t.toString()))
+                : [],
+              date:
+                typeof sExp.date === "string"
+                  ? sExp.date.split("T")[0]
+                  : new Date(sExp.date).toISOString().split("T")[0],
+              createdAt: sExp.createdAt
+                ? new Date(sExp.createdAt).toISOString()
+                : new Date().toISOString(),
+              updatedAt: sExp.updatedAt
+                ? new Date(sExp.updatedAt).toISOString()
+                : new Date().toISOString(),
+              syncStatus: "synced",
+            };
+            await db.expenses.put(localExp);
+          }
+        }
+
+        // Clean up any old local expenses that no longer exist on server and are not pending
+        const localExpenses = await db.expenses.toArray();
+        for (const localExp of localExpenses) {
+          if (!pendingClientIds.has(localExp.clientId) && !serverClientIds.has(localExp.clientId)) {
+            await db.expenses.delete(localExp.clientId);
+          }
+        }
+      }
+    }
+
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Pull error";
+    return { success: false, error: message };
+  }
+}
