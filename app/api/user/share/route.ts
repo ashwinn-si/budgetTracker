@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
-import connectToDatabase from "@/lib/db";
+import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models/User";
 import crypto from "crypto";
 
