@@ -626,7 +626,7 @@ export default function ProfilePage() {
                 </div>
               </div>
               <Button
-                variant={user?.isSharingEnabled ? "outline" : "primary"}
+                variant={user?.isSharingEnabled ? "ghost" : "primary"}
                 size="sm"
                 onClick={handleToggleSharing}
                 isLoading={isSharingLoading}

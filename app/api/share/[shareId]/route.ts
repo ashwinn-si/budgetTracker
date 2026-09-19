@@ -7,7 +7,7 @@ import { Tag } from "@/models/Tag";
 
 export async function GET(
   request: Request,
-  { params }: { params: { shareId: string } }
+  { params }: { params: Promise<{ shareId: string }> }
 ) {
   try {
     const { shareId } = await params; // Next.js dynamic routes context
