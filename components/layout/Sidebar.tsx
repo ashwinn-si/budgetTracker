@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   ReceiptText,
+  Tags,
   User,
   Sun,
   Moon,
@@ -40,6 +41,11 @@ export function Sidebar() {
       label: "Expenses",
       href: "/expenses",
       icon: ReceiptText,
+    },
+    {
+      label: "Tags & Categories",
+      href: "/tags",
+      icon: Tags,
     },
     {
       label: "Profile & Settings",

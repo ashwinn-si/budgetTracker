@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Search,
@@ -24,11 +25,20 @@ type SortOption = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
 
 export default function ExpensesPage() {
   const { formatAmount, currencyInfo } = useCurrency();
+  const searchParams = useSearchParams();
+  const tagParam = searchParams.get("tag");
+
   const [searchTerm, setSearchTerm] = useState("");
-  const [selectedTag, setSelectedTag] = useState("all");
+  const [selectedTag, setSelectedTag] = useState(tagParam || "all");
   const [sortBy, setSortBy] = useState<SortOption>("date-desc");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<LocalExpense | null>(null);
+
+  useEffect(() => {
+    if (tagParam) {
+      setSelectedTag(tagParam);
+    }
+  }, [tagParam]);
 
   // Live query from Dexie
   const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
