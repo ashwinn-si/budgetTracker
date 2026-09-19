@@ -148,26 +148,33 @@ export function Sidebar() {
         </button>
 
         {/* User Profile Glass Card */}
-        <div className="p-3 rounded-2xl glass-light border border-white/60 dark:border-white/10 flex items-center justify-between gap-3 shadow-xs">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-emerald-400 text-white font-heading font-bold flex items-center justify-center text-sm shadow-sm shrink-0">
+        <div className="p-2.5 rounded-2xl glass-light border border-white/60 dark:border-white/10 flex items-center justify-between gap-2 shadow-xs hover:border-emerald-500/40 transition-all group/profile">
+          <Link
+            href="/profile"
+            className="flex items-center gap-3 min-w-0 flex-1 p-1 -m-1 rounded-xl cursor-pointer"
+            title="Open Profile & Settings"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-emerald-400 text-white font-heading font-bold flex items-center justify-center text-sm shadow-sm shrink-0 group-hover/profile:scale-105 transition-transform">
               {user?.name ? user.name[0].toUpperCase() : "U"}
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-[var(--text-primary)] truncate font-heading">
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-[var(--text-primary)] truncate font-heading group-hover/profile:text-emerald-600 dark:group-hover/profile:text-emerald-400 transition-colors">
                 {user?.name || "Account"}
               </p>
               <p className="text-[11px] text-[var(--text-muted)] truncate">
                 {user?.email || "Personal Budget"}
               </p>
             </div>
-          </div>
+          </Link>
 
           <button
-            onClick={() => logout()}
+            onClick={(e) => {
+              e.stopPropagation();
+              logout();
+            }}
             title="Sign Out"
             aria-label="Sign Out"
-            className="min-h-[36px] min-w-[36px] rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+            className="min-h-[36px] min-w-[36px] rounded-xl flex items-center justify-center text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors shrink-0 cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
           </button>
