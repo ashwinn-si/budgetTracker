@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, ShieldCheck, Zap, CloudOff, FileSpreadsheet, Lock, LayoutDashboard } from "lucide-react";
+import { ArrowRight, ShieldCheck, Zap, CloudOff, FileSpreadsheet, Lock, LayoutDashboard, Github } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
@@ -119,20 +119,27 @@ export default function HomePage() {
       </main>
 
       {/* Footer with Legal Links */}
-      <footer className="pt-8 border-t border-black/5 dark:border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[var(--text-muted)]">
-        <div>
-          © 2026 BudgetFlow (money.ashwinsi.in). All rights reserved.
+      <footer className="pt-8 mt-12 border-t border-black/5 dark:border-white/5 flex flex-col items-center justify-center gap-6 text-xs text-[var(--text-muted)] pb-6">
+        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-black/5 dark:bg-white/5">
+          <span className="font-medium text-[var(--text-secondary)]">Designed & Built by</span>
+          <a 
+            href="https://github.com/ashwinn-si" 
+            target="_blank" 
+            rel="noreferrer" 
+            className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors group"
+          >
+            <Github className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            ashwinn-si
+          </a>
         </div>
-        <div className="flex items-center gap-6">
-          <Link href="/privacy" className="hover:text-[var(--text-primary)] underline">
-            Privacy Policy
-          </Link>
-          <Link href="/terms" className="hover:text-[var(--text-primary)] underline">
-            Terms of Service
-          </Link>
-          <Link href="/login" className="hover:text-[var(--text-primary)]">
-            Sign In
-          </Link>
+        
+        <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-8">
+          <span>© 2026 BudgetFlow. All rights reserved.</span>
+          <div className="flex items-center gap-4 sm:gap-6">
+            <Link href="/privacy" className="hover:text-[var(--text-primary)] transition-colors">Privacy</Link>
+            <Link href="/terms" className="hover:text-[var(--text-primary)] transition-colors">Terms</Link>
+            <Link href="/login" className="hover:text-[var(--text-primary)] transition-colors">Sign In</Link>
+          </div>
         </div>
       </footer>
     </div>

@@ -17,7 +17,8 @@ import {
   Trash2,
   Share2,
   Copy,
-  FileDown
+  FileDown,
+  Github
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -688,6 +689,22 @@ export default function ProfilePage() {
               </Button>
             </div>
           </GlassCard>
+        </div>
+      </div>
+      
+      {/* Footer Credit */}
+      <div className="pt-8 pb-4 flex justify-center">
+        <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-black/5 dark:bg-white/5 text-xs">
+          <span className="font-medium text-[var(--text-secondary)]">Designed & Built by</span>
+          <a 
+            href="https://github.com/ashwinn-si" 
+            target="_blank" 
+            rel="noreferrer" 
+            className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors group"
+          >
+            <Github className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            ashwinn-si
+          </a>
         </div>
       </div>
     </div>
