@@ -20,7 +20,7 @@ const openSans = Open_Sans({
 
 export const metadata: Metadata = {
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_APP_URL || "http://localhost:5173"
+    process.env.NEXT_PUBLIC_APP_URL || "https://money.ashwinsi.in"
   ),
   title: {
     default: "BudgetFlow — Modern Glassmorphism Budget Tracker",
@@ -38,8 +38,19 @@ export const metadata: Metadata = {
     "nextjs",
     "dexie",
   ],
-  authors: [{ name: "BudgetFlow" }],
-  creator: "BudgetFlow",
+  authors: [{ name: "ashwinn-si", url: "https://github.com/ashwinn-si" }],
+  creator: "ashwinn-si",
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
   icons: {
     icon: "/logo.png",
     shortcut: "/logo.png",
@@ -64,7 +75,7 @@ export const metadata: Metadata = {
     ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "BudgetFlow — Modern Glassmorphism Budget Tracker",
     description:
       "Track your expenses offline-first with beautiful light-green glassmorphism.",
