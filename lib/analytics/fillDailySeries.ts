@@ -1,4 +1,5 @@
 import { eachDayOfInterval, format, isSameDay } from "date-fns";
+import { formatDate } from "@/lib/dateUtils";
 
 export interface DailySeriesPoint {
   date: string;       // Formatted short label e.g. "Sep 17"
@@ -39,9 +40,9 @@ export function fillDailySeries(
     const key = format(day, "yyyy-MM-dd");
     const amount = Math.round((amountByDate.get(key) || 0) * 100) / 100;
     return {
-      date: format(day, "MMM d"),
+      date: format(day, "dd-MM-yy"),
       dayNumber: format(day, "d"),
-      fullDate: key,
+      fullDate: formatDate(day),
       amount,
       rawDate: day,
     };
