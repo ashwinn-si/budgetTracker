@@ -10,6 +10,7 @@ export interface AuthUser {
   email: string;
   currency?: string;
   sheetsLinked?: boolean;
+  sheetsSpreadsheetId?: string | null;
   sheetsLastSyncedAt?: string | null;
 }
 

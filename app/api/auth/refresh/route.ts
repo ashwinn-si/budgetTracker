@@ -106,6 +106,7 @@ export async function POST(req: NextRequest) {
         email: userDoc.email,
         currency: userDoc.currency || "INR",
         sheetsLinked: Boolean(userDoc.sheetsLinked || userDoc.googleAccessToken),
+        sheetsSpreadsheetId: userDoc.sheetsSpreadsheetId || null,
         sheetsLastSyncedAt: userDoc.sheetsLastSyncedAt,
       },
     });

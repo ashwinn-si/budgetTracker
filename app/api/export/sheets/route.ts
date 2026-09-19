@@ -21,6 +21,33 @@ function formatDateISO(date: Date): string {
   return `${y}-${m}-${d}`;
 }
 
+export async function GET(req: NextRequest) {
+  try {
+    const userSession = await getCurrentUser(req);
+    const userId = userSession?.userId;
+    if (!userId) {
+      return NextResponse.json({ linked: false }, { status: 401 });
+    }
+
+    await connectToDatabase();
+    const user = await User.findById(userId);
+    if (!user) {
+      return NextResponse.json({ linked: false }, { status: 404 });
+    }
+
+    const spreadsheetId = user.sheetsSpreadsheetId || null;
+    return NextResponse.json({
+      linked: Boolean(user.sheetsLinked || user.googleAccessToken),
+      spreadsheetId,
+      url: spreadsheetId ? `https://docs.google.com/spreadsheets/d/${spreadsheetId}` : null,
+      lastSyncedAt: user.sheetsLastSyncedAt || null,
+    });
+  } catch (error: unknown) {
+    console.error("GET /api/export/sheets error:", error);
+    return NextResponse.json({ error: "Failed to fetch sheets info" }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const userSession = await getCurrentUser(req);

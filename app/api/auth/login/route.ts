@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
         email: user.email,
         currency: user.currency || "INR",
         sheetsLinked: user.sheetsLinked,
+        sheetsSpreadsheetId: user.sheetsSpreadsheetId || null,
         sheetsLastSyncedAt: user.sheetsLastSyncedAt,
       },
       accessToken,
