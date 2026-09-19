@@ -235,24 +235,26 @@ export default function ProfilePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* ── Left: User & Preferences ── */}
-        <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7 space-y-6 h-full">
+        <div className="flex flex-col gap-4">
           {/* Avatar + name */}
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-serif-display text-xl sm:text-2xl font-bold flex items-center justify-center border border-emerald-500/30 shadow-md shrink-0">
-              {user?.name ? user.name[0].toUpperCase() : "A"}
+          <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-serif-display text-xl sm:text-2xl font-bold flex items-center justify-center border border-emerald-500/30 shadow-md shrink-0">
+                {user?.name ? user.name[0].toUpperCase() : "A"}
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-lg sm:text-xl font-serif-display font-medium text-[var(--text-primary)] truncate">
+                  {user?.name || "Alex Morgan"}
+                </h2>
+                <p className="text-xs sm:text-sm text-[var(--text-muted)] truncate">
+                  {user?.email || "alex.morgan@lifestyle.co"}
+                </p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-serif-display font-medium text-[var(--text-primary)] truncate">
-                {user?.name || "Alex Morgan"}
-              </h2>
-              <p className="text-xs sm:text-sm text-[var(--text-muted)] truncate">
-                {user?.email || "alex.morgan@lifestyle.co"}
-              </p>
-            </div>
-          </div>
+          </GlassCard>
 
           {/* Theme selector */}
-          <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-2">
+          <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7 space-y-4">
             <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
               Appearance Theme
             </label>
@@ -280,10 +282,10 @@ export default function ProfilePage() {
                 );
               })}
             </div>
-          </div>
+          </GlassCard>
 
           {/* Currency & Regional Settings */}
-          <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-2.5">
+          <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 whitespace-nowrap">
                 <Coins className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
@@ -322,10 +324,10 @@ export default function ProfilePage() {
                 );
               })}
             </div>
-          </div>
+          </GlassCard>
 
           {/* Decimal Places Setting */}
-          <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-2">
+          <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block">
@@ -354,10 +356,10 @@ export default function ProfilePage() {
                 />
               </button>
             </div>
-          </div>
+          </GlassCard>
 
           {/* Password Reset */}
-          <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-2">
+          <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7 space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
@@ -390,19 +392,19 @@ export default function ProfilePage() {
                 )}
               </div>
             )}
-          </div>
 
-          <div className="pt-2">
-            <Button
-              variant="danger"
-              size="sm"
-              fullWidth
-              onClick={() => logout()}
-            >
-              Sign Out
-            </Button>
-          </div>
-        </GlassCard>
+            <div className="pt-4 mt-4 border-t border-black/5 dark:border-white/5">
+              <Button
+                variant="danger"
+                size="sm"
+                fullWidth
+                onClick={() => logout()}
+              >
+                Sign Out
+              </Button>
+            </div>
+          </GlassCard>
+        </div>
 
         {/* ── Right: Sync & Integrations ── */}
         <div className="space-y-6">
