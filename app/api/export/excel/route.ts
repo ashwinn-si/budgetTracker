@@ -76,6 +76,8 @@ export async function GET(req: NextRequest) {
       note: string;
       tags: string[];
       amount: number;
+      isSaving?: boolean;
+      fromSavings?: boolean;
     }
 
     let expensesData: ProcessedExpense[] = [];
@@ -100,6 +102,8 @@ export async function GET(req: NextRequest) {
           note: exp.note || "No note",
           tags: tags.length > 0 ? tags : ["Uncategorized"],
           amount: typeof exp.amount === "number" ? exp.amount : parseFloat(exp.amount) || 0,
+          isSaving: (exp as any).isSaving || false,
+          fromSavings: (exp as any).fromSavings || false,
         };
       });
 
@@ -194,7 +198,7 @@ export async function GET(req: NextRequest) {
 
     // Row 6: Frozen Column Headers
     const headerRow = expensesSheet.getRow(6);
-    headerRow.values = ["Date", "Note", "Tags", "Amount"];
+    headerRow.values = ["Date", "Note", "Tags", "Amount", "Type"];
     headerRow.height = 26;
     headerRow.eachCell((cell) => {
       cell.font = { bold: true, color: { argb: "FFFFFFFF" }, size: 11, name: "Calibri" };
@@ -202,6 +206,7 @@ export async function GET(req: NextRequest) {
       cell.alignment = { vertical: "middle", horizontal: "left" };
     });
     headerRow.getCell(4).alignment = { vertical: "middle", horizontal: "right" };
+    headerRow.getCell(5).alignment = { vertical: "middle", horizontal: "center" };
 
     // Define column widths
     expensesSheet.columns = [
@@ -209,6 +214,7 @@ export async function GET(req: NextRequest) {
       { key: "note", width: 34 },
       { key: "tags", width: 26 },
       { key: "amount", width: 16 },
+      { key: "type", width: 16 },
     ];
 
     // Rows 7…n: One row per expense (sorted oldest first)
@@ -216,7 +222,8 @@ export async function GET(req: NextRequest) {
     for (const exp of expensesData) {
       const row = expensesSheet.getRow(rowIndex++);
       const sortedTags = [...exp.tags].sort().join(", ");
-      row.values = [exp.date, exp.note, sortedTags, exp.amount];
+      const typeLabel = exp.isSaving ? "🏦 Saving" : exp.fromSavings ? "💸 From Savings" : "Expense";
+      row.values = [exp.date, exp.note, sortedTags, exp.amount, typeLabel];
       row.height = 20;
 
       const dateCell = row.getCell(1);
@@ -236,10 +243,20 @@ export async function GET(req: NextRequest) {
       amtCell.numFmt = currencyNumFmt;
       amtCell.alignment = { vertical: "middle", horizontal: "right" };
       amtCell.font = { size: 10.5, name: "Calibri" };
+      // Colour savings rows
+      if (exp.isSaving) {
+        amtCell.font = { size: 10.5, name: "Calibri", color: { argb: "FF0D9488" } }; // teal
+      } else if (exp.fromSavings) {
+        amtCell.font = { size: 10.5, name: "Calibri", color: { argb: "FFF59E0B" } }; // amber
+      }
+
+      const typeCell = row.getCell(5);
+      typeCell.alignment = { vertical: "middle", horizontal: "center" };
+      typeCell.font = { size: 10.5, name: "Calibri" };
     }
 
     // AutoFilter on header row
-    expensesSheet.autoFilter = { from: "A6", to: "D6" };
+    expensesSheet.autoFilter = { from: "A6", to: "E6" };
 
     // Row n+1: Blank spacer
     expensesSheet.getRow(rowIndex).height = 12;
@@ -249,20 +266,45 @@ export async function GET(req: NextRequest) {
     const totalRow = expensesSheet.getRow(totalRowIndex);
     totalRow.height = 24;
 
-    totalRow.getCell(2).value = "Total";
+    totalRow.getCell(2).value = "Total Expenses";
     totalRow.getCell(2).font = { bold: true, size: 10.5, name: "Calibri" };
     totalRow.getCell(2).alignment = { vertical: "middle", horizontal: "left" };
 
     const lastExpenseRow = Math.max(7, rowIndex - 1);
     const totalAmountCell = totalRow.getCell(4);
     totalAmountCell.value = {
-      formula: `SUM(D7:D${lastExpenseRow})`,
-      result: expensesData.reduce((sum, e) => sum + e.amount, 0),
+      formula: `SUMIF(E7:E${lastExpenseRow},"Expense",D7:D${lastExpenseRow})`,
+      result: expensesData.filter((e) => !e.isSaving && !e.fromSavings).reduce((sum, e) => sum + e.amount, 0),
     };
     totalAmountCell.font = { bold: true, size: 10.5, name: "Calibri" };
     totalAmountCell.numFmt = currencyNumFmt;
     totalAmountCell.alignment = { vertical: "middle", horizontal: "right" };
     totalAmountCell.border = { top: { style: "thin" } };
+
+    // Savings summary row
+    const savingsRowIndex = totalRowIndex + 1;
+    const savingsRow = expensesSheet.getRow(savingsRowIndex);
+    savingsRow.height = 22;
+    savingsRow.getCell(2).value = "Total Saved";
+    savingsRow.getCell(2).font = { size: 10.5, name: "Calibri", color: { argb: "FF0D9488" } };
+    savingsRow.getCell(2).alignment = { vertical: "middle", horizontal: "left" };
+    const savedCell = savingsRow.getCell(4);
+    savedCell.value = expensesData.filter((e) => e.isSaving).reduce((sum, e) => sum + e.amount, 0);
+    savedCell.numFmt = currencyNumFmt;
+    savedCell.font = { size: 10.5, name: "Calibri", color: { argb: "FF0D9488" } };
+    savedCell.alignment = { vertical: "middle", horizontal: "right" };
+
+    const fromSavingsRowIndex = savingsRowIndex + 1;
+    const fromSavingsRow = expensesSheet.getRow(fromSavingsRowIndex);
+    fromSavingsRow.height = 22;
+    fromSavingsRow.getCell(2).value = "Withdrawn from Savings";
+    fromSavingsRow.getCell(2).font = { size: 10.5, name: "Calibri", color: { argb: "FFF59E0B" } };
+    fromSavingsRow.getCell(2).alignment = { vertical: "middle", horizontal: "left" };
+    const fromSavedCell = fromSavingsRow.getCell(4);
+    fromSavedCell.value = expensesData.filter((e) => e.fromSavings).reduce((sum, e) => sum + e.amount, 0);
+    fromSavedCell.numFmt = currencyNumFmt;
+    fromSavedCell.font = { size: 10.5, name: "Calibri", color: { argb: "FFF59E0B" } };
+    fromSavedCell.alignment = { vertical: "middle", horizontal: "right" };
 
     // ------------------------------------------
     // TAB 2: Summary by Tag

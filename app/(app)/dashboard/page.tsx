@@ -12,11 +12,10 @@ import {
   Receipt,
   Tag,
   CalendarDays,
-  LayoutDashboard,
+  PiggyBank,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { useSync } from "@/lib/offline/useSync";
@@ -145,6 +144,18 @@ function DashboardContent() {
     return Math.max(...currentExpenses.map((e) => e.amount));
   }, [currentExpenses]);
 
+  // Savings balance — all-time, ignores period filter
+  // Positive = amount saved; Negative = spent more from savings than saved
+  const savingsBalance = useMemo(() => {
+    const totalSaved = allExpenses
+      .filter((e) => e.isSaving)
+      .reduce((sum, e) => sum + e.amount, 0);
+    const totalFromSavings = allExpenses
+      .filter((e) => e.fromSavings)
+      .reduce((sum, e) => sum + e.amount, 0);
+    return { totalSaved, totalFromSavings, balance: totalSaved - totalFromSavings };
+  }, [allExpenses]);
+
   // Tag Breakdown
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, { total: number; count: number }> = {};
@@ -271,45 +282,87 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* Header */}
-      <PageHeader
-        eyebrow="Overview & Spend Analytics"
-        title={<>Financial <em>Pacing</em></>}
-        icon={<LayoutDashboard className="w-5 h-5" />}
-        actions={
-          <div className="hidden sm:flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleExcelExport}
-              isLoading={isExporting}
-              icon={<Download className="w-4 h-4" />}
-              className="text-xs"
-            >
-              Export
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => syncNow()}
-              isLoading={isSyncing}
-              icon={<RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin text-emerald-500" : ""}`} />}
-              className="text-xs"
-            >
-              Sync
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={() => setIsAddExpenseOpen(true)}
-              icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
-              className="shadow-emerald-500/20 shadow-lg"
-            >
-              Add Expense
-            </Button>
+      {/* Header & Main Actions */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
+        <div>
+          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            Overview &amp; Spend Analytics
+          </span>
+          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
+            Financial <em>Pacing</em>
+          </h1>
+        </div>
+
+        <div className="hidden sm:flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleExcelExport}
+            isLoading={isExporting}
+            icon={<Download className="w-4 h-4" />}
+            className="text-xs sm:text-sm"
+          >
+            Export Excel
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => syncNow()}
+            isLoading={isSyncing}
+            icon={<RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin text-emerald-500" : ""}`} />}
+            className="text-xs sm:text-sm"
+          >
+            Sync
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setIsAddExpenseOpen(true)}
+            icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+            className="shadow-emerald-500/20 shadow-lg"
+          >
+            Add Expense
+          </Button>
+        </div>
+      </div>
+
+      {/* Savings Balance Banner — only shown when savings have been logged */}
+      {(savingsBalance.totalSaved > 0 || savingsBalance.totalFromSavings > 0) && (
+        <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-5 py-4 rounded-2xl border ${
+          savingsBalance.balance >= 0
+            ? "bg-teal-500/[0.07] dark:bg-teal-500/[0.1] border-teal-500/25"
+            : "bg-rose-500/[0.07] dark:bg-rose-500/[0.1] border-rose-500/25"
+        }`}>
+          <div className="flex items-center gap-3">
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+              savingsBalance.balance >= 0
+                ? "bg-teal-500/15 text-teal-600 dark:text-teal-400"
+                : "bg-rose-500/15 text-rose-500"
+            }`}>
+              <PiggyBank className="w-4.5 h-4.5" />
+            </div>
+            <div>
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${
+                savingsBalance.balance >= 0
+                  ? "text-teal-700 dark:text-teal-400"
+                  : "text-rose-600 dark:text-rose-400"
+              }`}>
+                Savings Balance
+              </p>
+              <p className="text-[var(--text-muted)] text-xs mt-0.5">
+                {formatAmount(savingsBalance.totalSaved)} saved &nbsp;·&nbsp; {formatAmount(savingsBalance.totalFromSavings)} withdrawn
+              </p>
+            </div>
           </div>
-        }
-      />
+          <span className={`text-2xl font-serif-display font-semibold ${
+            savingsBalance.balance >= 0
+              ? "text-teal-700 dark:text-teal-300"
+              : "text-rose-600 dark:text-rose-400"
+          }`}>
+            {savingsBalance.balance >= 0 ? "+" : ""}{formatAmount(savingsBalance.balance)}
+          </span>
+        </div>
+      )}
 
       {/* Filter Bar: Date Presets & Multi-Tag Selector */}
       <GlassCard variant="light" className="p-3 sm:p-3.5 space-y-3">

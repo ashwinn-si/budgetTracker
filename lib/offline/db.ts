@@ -19,6 +19,10 @@ export interface LocalExpense {
   createdAt: string;
   updatedAt: string;
   syncStatus: "synced" | "pending" | "conflict";
+  /** True when this entry adds money to the savings balance */
+  isSaving?: boolean;
+  /** True when this expense was paid out of the savings balance */
+  fromSavings?: boolean;
 }
 
 export interface SyncQueueItem {
@@ -39,6 +43,12 @@ export class BudgetDatabase extends Dexie {
     super("BudgetTrackerDB");
     this.version(1).stores({
       expenses: "clientId, _id, userId, date, syncStatus, *tagIds",
+      tags: "_id, userId, name",
+      syncQueue: "++id, clientId, entity, action, createdAt",
+    });
+    // v2: adds isSaving and fromSavings boolean columns
+    this.version(2).stores({
+      expenses: "clientId, _id, userId, date, syncStatus, *tagIds, isSaving, fromSavings",
       tags: "_id, userId, name",
       syncQueue: "++id, clientId, entity, action, createdAt",
     });

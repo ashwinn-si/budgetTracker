@@ -12,6 +12,8 @@ import {
   Search,
   Sparkles,
   X,
+  PiggyBank,
+  ArrowDownLeft,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -58,6 +60,8 @@ export function ExpenseFormModal({
   // Search or quick-create category query
   const [tagSearchQuery, setTagSearchQuery] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [fromSavings, setFromSavings] = useState<boolean>(false);
 
   // Live tags from Dexie
   const tags = useLiveQuery(() => db.tags.toArray(), []) || [];
@@ -73,9 +77,19 @@ export function ExpenseFormModal({
       setNote("");
       setDate(new Date().toISOString().split("T")[0]);
       setSelectedTagIds([]);
+      setIsSaving(false);
+      setFromSavings(false);
     }
     setTagSearchQuery("");
   }, [initialExpense, isOpen]);
+
+  // When editing, pre-fill saving flags
+  useEffect(() => {
+    if (initialExpense) {
+      setIsSaving(!!initialExpense.isSaving);
+      setFromSavings(!!initialExpense.fromSavings);
+    }
+  }, [initialExpense]);
 
   const toggleTag = (tagId: string) => {
     setSelectedTagIds((prev) =>
@@ -147,6 +161,8 @@ export function ExpenseFormModal({
           date,
           updatedAt: now,
           syncStatus: "pending",
+          isSaving: isSaving || undefined,
+          fromSavings: fromSavings || undefined,
         };
         await queueExpenseUpdate(updatedExpense);
       } else {
@@ -160,6 +176,8 @@ export function ExpenseFormModal({
           createdAt: now,
           updatedAt: now,
           syncStatus: "pending",
+          isSaving: isSaving || undefined,
+          fromSavings: fromSavings || undefined,
         };
         await queueExpenseCreation(newExpense);
       }
@@ -367,6 +385,53 @@ export function ExpenseFormModal({
               </p>
             )}
           </div>
+        </div>
+
+        {/* Saving / From Savings Toggles */}
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
+            <PiggyBank className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span>Savings</span>
+          </label>
+          <div className="flex flex-wrap gap-2">
+            {/* Saving toggle */}
+            <button
+              type="button"
+              onClick={() => { setIsSaving(!isSaving); if (!isSaving) setFromSavings(false); }}
+              className={`min-h-[36px] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                isSaving
+                  ? "bg-teal-500 border-teal-500 text-white shadow-md shadow-teal-500/25"
+                  : "bg-white/60 dark:bg-white/[0.06] border-black/[0.08] dark:border-white/10 text-[var(--text-secondary)] hover:border-teal-400/50 hover:bg-teal-50 dark:hover:bg-teal-500/10"
+              }`}
+            >
+              <PiggyBank className="w-3.5 h-3.5" />
+              <span>Adding to savings</span>
+              {isSaving && <Check className="w-3.5 h-3.5 ml-0.5 stroke-[2.5]" />}
+            </button>
+
+            {/* From Savings toggle */}
+            <button
+              type="button"
+              onClick={() => { setFromSavings(!fromSavings); if (!fromSavings) setIsSaving(false); }}
+              className={`min-h-[36px] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                fromSavings
+                  ? "bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-500/25"
+                  : "bg-white/60 dark:bg-white/[0.06] border-black/[0.08] dark:border-white/10 text-[var(--text-secondary)] hover:border-amber-400/50 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+              }`}
+            >
+              <ArrowDownLeft className="w-3.5 h-3.5" />
+              <span>Spending from savings</span>
+              {fromSavings && <Check className="w-3.5 h-3.5 ml-0.5 stroke-[2.5]" />}
+            </button>
+          </div>
+
+          {(isSaving || fromSavings) && (
+            <p className="text-[11px] text-[var(--text-muted)] pl-0.5">
+              {isSaving
+                ? "This amount will be added to your savings balance."
+                : "This expense will be deducted from your savings balance."}
+            </p>
+          )}
         </div>
       </form>
     </Modal>
