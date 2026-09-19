@@ -7,6 +7,7 @@ import { BottomNav } from "@/components/layout/BottomNav";
 import { Navbar } from "@/components/layout/Navbar";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { useAuth } from "@/context/AuthContext";
+import { SidebarProvider } from "@/context/SidebarContext";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
@@ -32,29 +33,31 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex w-full">
-      {/* Desktop Sidebar */}
-      <Sidebar />
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        {/* Desktop Sidebar */}
+        <Sidebar />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Top Navbar */}
-        <Navbar />
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Top Navbar */}
+          <Navbar />
 
-        {/* Page Content */}
-        <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
-          {children}
-        </main>
+          {/* Page Content */}
+          <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
+            {children}
+          </main>
+        </div>
+
+        {/* Mobile Bottom Navigation */}
+        <BottomNav onOpenAddExpense={() => setIsAddExpenseOpen(true)} />
+
+        {/* Global Quick Add Expense Modal */}
+        <ExpenseFormModal
+          isOpen={isAddExpenseOpen}
+          onClose={() => setIsAddExpenseOpen(false)}
+        />
       </div>
-
-      {/* Mobile Bottom Navigation */}
-      <BottomNav onOpenAddExpense={() => setIsAddExpenseOpen(true)} />
-
-      {/* Global Quick Add Expense Modal */}
-      <ExpenseFormModal
-        isOpen={isAddExpenseOpen}
-        onClose={() => setIsAddExpenseOpen(false)}
-      />
-    </div>
+    </SidebarProvider>
   );
 }

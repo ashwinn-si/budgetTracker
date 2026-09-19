@@ -3,33 +3,46 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { Sun, Moon, CloudCheck, CloudUpload, WifiOff } from "lucide-react";
+import { Sun, Moon, CloudCheck, CloudUpload, WifiOff, Menu } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
 import { useSync } from "@/lib/offline/useSync";
+import { useSidebar } from "@/context/SidebarContext";
 
 export function Navbar() {
   const { theme, toggleTheme } = useTheme();
   const { status, pendingCount } = useSync();
+  const { openMobile } = useSidebar();
 
   return (
     // Only displayed on mobile (< lg), desktop uses the full Sidebar
     <header className="lg:hidden sticky top-0 z-30 w-full glass-mid border-b border-white/60 dark:border-white/10 backdrop-blur-2xl px-4 py-2.5 shadow-sm transition-colors">
       <div className="flex items-center justify-between">
-        {/* Brand */}
-        <Link href="/dashboard" className="flex items-center gap-2.5 group">
-          <div className="w-8 h-8 rounded-xl overflow-hidden shadow-sm shrink-0 border border-white/60 dark:border-white/10">
-            <Image
-              src="/logo.png"
-              alt="BudgetFlow Logo"
-              width={32}
-              height={32}
-              className="w-full h-full object-cover"
-            />
-          </div>
-          <span className="font-heading font-semibold text-base tracking-tight text-[var(--text-primary)]">
-            Budget<span className="text-emerald-500 dark:text-emerald-400 font-normal">Flow</span>
-          </span>
-        </Link>
+        <div className="flex items-center gap-2.5">
+          {/* Mobile Hamburger Toggle Button */}
+          <button
+            onClick={openMobile}
+            aria-label="Open sidebar menu"
+            className="min-h-[38px] min-w-[38px] rounded-xl glass-light border border-white/60 dark:border-white/10 flex items-center justify-center text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all shadow-xs cursor-pointer"
+          >
+            <Menu className="w-5 h-5 text-[var(--text-secondary)]" />
+          </button>
+
+          {/* Brand */}
+          <Link href="/dashboard" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-xl overflow-hidden shadow-sm shrink-0 border border-white/60 dark:border-white/10">
+              <Image
+                src="/logo.png"
+                alt="BudgetFlow Logo"
+                width={32}
+                height={32}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <span className="font-heading font-semibold text-base tracking-tight text-[var(--text-primary)]">
+              Budget<span className="text-emerald-500 dark:text-emerald-400 font-normal">Flow</span>
+            </span>
+          </Link>
+        </div>
 
         {/* Right Status & Controls */}
         <div className="flex items-center gap-2">
