@@ -51,6 +51,8 @@ export async function POST(req: NextRequest) {
               tagIds: Array.isArray(payload.tagIds) ? payload.tagIds : [],
               date: payload.date ? new Date(payload.date as string) : new Date(),
               syncStatus: "synced",
+              isSaving: Boolean(payload.isSaving) || false,
+              fromSavings: Boolean(payload.fromSavings) || false,
             });
           } else {
             // Conflict resolution: last-write-wins based on updatedAt
@@ -67,6 +69,8 @@ export async function POST(req: NextRequest) {
                 : existing.tagIds;
               if (payload.date) existing.date = new Date(payload.date as string);
               existing.syncStatus = "synced";
+              existing.isSaving = Boolean(payload.isSaving) || false;
+              existing.fromSavings = Boolean(payload.fromSavings) || false;
               await existing.save();
             }
           }
@@ -87,6 +91,8 @@ export async function POST(req: NextRequest) {
               : existing.tagIds;
             if (payload.date) existing.date = new Date(payload.date as string);
             existing.syncStatus = "synced";
+            existing.isSaving = Boolean(payload.isSaving) || false;
+            existing.fromSavings = Boolean(payload.fromSavings) || false;
             await existing.save();
           }
           processedCount++;

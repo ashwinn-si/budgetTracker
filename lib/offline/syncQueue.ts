@@ -162,6 +162,9 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
                 ? new Date(sExp.updatedAt).toISOString()
                 : new Date().toISOString(),
               syncStatus: "synced",
+              // Preserve savings flags from server
+              isSaving: Boolean(sExp.isSaving) || undefined,
+              fromSavings: Boolean(sExp.fromSavings) || undefined,
             };
             await db.expenses.put(localExp);
           }

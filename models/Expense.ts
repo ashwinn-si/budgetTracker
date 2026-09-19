@@ -10,6 +10,10 @@ export interface IExpense extends Document {
   syncStatus: "synced" | "pending" | "conflict";
   createdAt: Date;
   updatedAt: Date;
+  /** Money being set aside into savings */
+  isSaving?: boolean;
+  /** Expense paid from the savings balance */
+  fromSavings?: boolean;
 }
 
 const ExpenseSchema = new Schema<IExpense>(
@@ -25,6 +29,8 @@ const ExpenseSchema = new Schema<IExpense>(
       enum: ["synced", "pending", "conflict"],
       default: "synced",
     },
+    isSaving: { type: Boolean, default: false },
+    fromSavings: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
