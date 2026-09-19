@@ -19,12 +19,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   ExternalLink,
+  Coins,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useCurrency, SUPPORTED_CURRENCIES } from "@/context/CurrencyContext";
 import { useSync } from "@/lib/offline/useSync";
 import { db, LocalTag } from "@/lib/offline/db";
 import { queueTagCreation, queueTagDeletion } from "@/lib/offline/syncQueue";
@@ -32,6 +34,7 @@ import { queueTagCreation, queueTagDeletion } from "@/lib/offline/syncQueue";
 export default function ProfilePage() {
   const { user, logout } = useAuth();
   const { theme, setTheme } = useTheme();
+  const { currency, setCurrency, formatAmount } = useCurrency();
   const { status, pendingCount, lastSyncedAt, syncNow, isSyncing } = useSync();
 
   // Tags from Dexie
@@ -203,6 +206,45 @@ export default function ProfilePage() {
                   >
                     <Icon className="w-4 h-4" />
                     <span>{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Currency & Regional Settings */}
+          <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5">
+                <Coins className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Currency & Regional Unit</span>
+              </label>
+              <span className="text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-serif-display">
+                Preview: {formatAmount(14500)}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {Object.values(SUPPORTED_CURRENCIES).map((c) => {
+                const active = currency === c.code;
+                return (
+                  <button
+                    key={c.code}
+                    type="button"
+                    onClick={() => setCurrency(c.code)}
+                    className={`min-h-[52px] p-2 rounded-2xl flex flex-col items-center justify-center text-center transition-all cursor-pointer border select-none ${
+                      active
+                        ? "bg-emerald-500/15 border-emerald-500 text-emerald-800 dark:text-emerald-300 font-semibold shadow-sm ring-1 ring-emerald-500/40 scale-[1.02]"
+                        : "bg-white/40 dark:bg-black/30 border-black/5 dark:border-white/10 text-[var(--text-secondary)] hover:bg-white/70 dark:hover:bg-white/5 hover:border-emerald-500/30"
+                    }`}
+                  >
+                    <span className="flex items-center gap-1.5 text-sm font-bold font-serif-display">
+                      <span className="text-base leading-none">{c.flag}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400">{c.symbol}</span>
+                    </span>
+                    <span className="text-[10px] text-[var(--text-muted)] font-sans font-medium mt-0.5">
+                      {c.code} • {c.name.split(" ")[0]}
+                    </span>
                   </button>
                 );
               })}

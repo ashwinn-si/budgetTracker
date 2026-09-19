@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
       .lean();
 
     const rows = [
-      ["Date", "Description", "Categories", "Amount ($)"],
+      ["Date", "Description", "Categories", `Amount (${user?.currency || "INR"})`],
       ...expenses.map((e) => {
         const tagNames = (e.tagIds as any[])
           ?.map((t) => (typeof t === "object" ? t.name : ""))

@@ -3,12 +3,20 @@ import ExcelJS from "exceljs";
 import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
 import { Tag } from "@/models/Tag";
+import { User } from "@/models/User";
 import { getCurrentUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser(req);
     const userId = user?.userId || "local_user";
+
+    let userCurrency = "INR";
+    if (user) {
+      await connectToDatabase();
+      const dbUser = await User.findById(user.userId);
+      if (dbUser?.currency) userCurrency = dbUser.currency;
+    }
 
     const { searchParams } = new URL(req.url);
     const startDate = searchParams.get("startDate");
@@ -76,7 +84,7 @@ export async function GET(req: NextRequest) {
       { header: "Date", key: "date", width: 14 },
       { header: "Description", key: "note", width: 34 },
       { header: "Categories", key: "tags", width: 22 },
-      { header: "Amount ($)", key: "amount", width: 16 },
+      { header: `Amount (${userCurrency})`, key: "amount", width: 16 },
     ];
 
     // Style Header Row in Emerald Theme

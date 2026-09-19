@@ -104,6 +104,7 @@ export async function POST(req: NextRequest) {
         id: userDoc._id.toString(),
         name: userDoc.name,
         email: userDoc.email,
+        currency: userDoc.currency || "INR",
         sheetsLinked: Boolean(userDoc.sheetsLinked || userDoc.googleAccessToken),
         sheetsLastSyncedAt: userDoc.sheetsLastSyncedAt,
       },

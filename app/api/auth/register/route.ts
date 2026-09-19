@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     });
 
     const response = NextResponse.json({
-      user: { id: user._id.toString(), name: user.name, email: user.email },
+      user: { id: user._id.toString(), name: user.name, email: user.email, currency: user.currency || "INR" },
       accessToken,
     });
 

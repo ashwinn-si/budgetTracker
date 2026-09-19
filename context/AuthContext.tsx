@@ -6,6 +6,7 @@ export interface AuthUser {
   id: string;
   name: string;
   email: string;
+  currency?: string;
   sheetsLinked?: boolean;
   sheetsLastSyncedAt?: string | null;
 }

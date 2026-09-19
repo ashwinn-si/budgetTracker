@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { db, LocalExpense, LocalTag } from "@/lib/offline/db";
 import { queueExpenseCreation, queueExpenseUpdate, queueTagCreation } from "@/lib/offline/syncQueue";
 import { useAuth } from "@/context/AuthContext";
+import { useCurrency } from "@/context/CurrencyContext";
 
 interface ExpenseFormModalProps {
   isOpen: boolean;
@@ -23,6 +24,7 @@ export function ExpenseFormModal({
   onSaved,
 }: ExpenseFormModalProps) {
   const { user } = useAuth();
+  const { currencyInfo } = useCurrency();
   const userId = user?.id || "local_user";
 
   const [amount, setAmount] = useState<string>("");
@@ -172,7 +174,7 @@ export function ExpenseFormModal({
           </label>
           <div className="flex items-center">
             <span className="text-3xl sm:text-4xl font-serif-display font-bold text-emerald-600 dark:text-emerald-400 mr-2 select-none">
-              $
+              {currencyInfo.symbol}
             </span>
             <input
               type="number"

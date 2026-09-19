@@ -1,0 +1,166 @@
+"use client";
+
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { useAuth } from "./AuthContext";
+
+export interface CurrencyInfo {
+  code: string;
+  symbol: string;
+  name: string;
+  locale: string;
+  flag: string;
+}
+
+export const SUPPORTED_CURRENCIES: Record<string, CurrencyInfo> = {
+  INR: {
+    code: "INR",
+    symbol: "₹",
+    name: "Indian Rupee",
+    locale: "en-IN",
+    flag: "🇮🇳",
+  },
+  USD: {
+    code: "USD",
+    symbol: "$",
+    name: "US Dollar",
+    locale: "en-US",
+    flag: "🇺🇸",
+  },
+  EUR: {
+    code: "EUR",
+    symbol: "€",
+    name: "Euro",
+    locale: "de-DE",
+    flag: "🇪🇺",
+  },
+  GBP: {
+    code: "GBP",
+    symbol: "£",
+    name: "British Pound",
+    locale: "en-GB",
+    flag: "🇬🇧",
+  },
+  AED: {
+    code: "AED",
+    symbol: "د.إ",
+    name: "UAE Dirham",
+    locale: "ar-AE",
+    flag: "🇦🇪",
+  },
+  CAD: {
+    code: "CAD",
+    symbol: "CA$",
+    name: "Canadian Dollar",
+    locale: "en-CA",
+    flag: "🇨🇦",
+  },
+  AUD: {
+    code: "AUD",
+    symbol: "A$",
+    name: "Australian Dollar",
+    locale: "en-AU",
+    flag: "🇦🇺",
+  },
+  JPY: {
+    code: "JPY",
+    symbol: "¥",
+    name: "Japanese Yen",
+    locale: "ja-JP",
+    flag: "🇯🇵",
+  },
+  SGD: {
+    code: "SGD",
+    symbol: "S$",
+    name: "Singapore Dollar",
+    locale: "en-SG",
+    flag: "🇸🇬",
+  },
+};
+
+interface CurrencyContextType {
+  currency: string;
+  currencyInfo: CurrencyInfo;
+  setCurrency: (code: string) => Promise<void>;
+  formatAmount: (amount: number | string | undefined | null, showDecimals?: boolean) => string;
+}
+
+const CurrencyContext = createContext<CurrencyContextType | undefined>(undefined);
+
+export function CurrencyProvider({ children }: { children: React.ReactNode }) {
+  const { user, updateUser } = useAuth();
+  const [currency, setCurrencyState] = useState<string>("INR");
+
+  // Initialize currency from user profile or localStorage on mount
+  useEffect(() => {
+    if (user?.currency && SUPPORTED_CURRENCIES[user.currency.toUpperCase()]) {
+      setCurrencyState(user.currency.toUpperCase());
+      localStorage.setItem("budget_currency", user.currency.toUpperCase());
+      return;
+    }
+
+    const saved = localStorage.getItem("budget_currency");
+    if (saved && SUPPORTED_CURRENCIES[saved.toUpperCase()]) {
+      setCurrencyState(saved.toUpperCase());
+    } else {
+      setCurrencyState("INR");
+    }
+  }, [user?.currency]);
+
+  const currencyInfo = SUPPORTED_CURRENCIES[currency] || SUPPORTED_CURRENCIES.INR;
+
+  const setCurrency = useCallback(
+    async (code: string) => {
+      const upper = code.toUpperCase();
+      if (!SUPPORTED_CURRENCIES[upper]) return;
+
+      setCurrencyState(upper);
+      localStorage.setItem("budget_currency", upper);
+      updateUser({ currency: upper });
+
+      try {
+        await fetch("/api/user/preferences", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ currency: upper }),
+        });
+      } catch (err) {
+        console.error("Failed to persist currency preference to server:", err);
+      }
+    },
+    [updateUser]
+  );
+
+  const formatAmount = useCallback(
+    (amount: number | string | undefined | null, showDecimals = true): string => {
+      const num = typeof amount === "string" ? parseFloat(amount) : (amount ?? 0);
+      if (isNaN(num)) return `${currencyInfo.symbol}0.00`;
+      const formatted = num.toLocaleString(currencyInfo.locale, {
+        minimumFractionDigits: showDecimals ? 2 : 0,
+        maximumFractionDigits: showDecimals ? 2 : 0,
+      });
+      return `${currencyInfo.symbol}${formatted}`;
+    },
+    [currencyInfo]
+  );
+
+  return (
+    <CurrencyContext.Provider
+      value={{
+        currency,
+        currencyInfo,
+        setCurrency,
+        formatAmount,
+      }}
+    >
+      {children}
+    </CurrencyContext.Provider>
+  );
+}
+
+export function useCurrency() {
+  const context = useContext(CurrencyContext);
+  if (!context) {
+    throw new Error("useCurrency must be used within a CurrencyProvider");
+  }
+  return context;
+}

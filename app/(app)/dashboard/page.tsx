@@ -30,12 +30,14 @@ import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { useSync } from "@/lib/offline/useSync";
 import { useLoading } from "@/context/LoadingContext";
+import { useCurrency } from "@/context/CurrencyContext";
 
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { status, syncNow, isSyncing } = useSync();
   const { startLoading, stopLoading } = useLoading();
+  const { formatAmount, currencyInfo } = useCurrency();
 
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -332,7 +334,7 @@ function DashboardContent() {
               size={190}
               strokeWidth={12}
               label="Pacing"
-              sublabel={`vs $${prevTotalSpend.toLocaleString("en-US", { minimumFractionDigits: 2 })}`}
+              sublabel={`vs ${formatAmount(prevTotalSpend)}`}
             />
           </div>
 
@@ -340,7 +342,7 @@ function DashboardContent() {
             <div>
               <span className="text-xs text-[var(--text-muted)] block">Current Total</span>
               <span className="text-2xl font-serif-display font-semibold text-[var(--text-primary)]">
-                ${totalSpend.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {formatAmount(totalSpend)}
               </span>
             </div>
 
@@ -405,7 +407,7 @@ function DashboardContent() {
                   fontSize={11}
                   tickLine={false}
                   axisLine={false}
-                  tickFormatter={(val) => `$${val}`}
+                  tickFormatter={(val) => `${currencyInfo.symbol}${val}`}
                 />
                 <Tooltip
                   contentStyle={{
@@ -416,7 +418,7 @@ function DashboardContent() {
                     boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
                     fontSize: "12px",
                   }}
-                  formatter={(value: any) => [`$${value}`, "Amount"]}
+                  formatter={(value: any) => [formatAmount(Number(value)), "Amount"]}
                 />
                 <Area
                   type="monotone"
@@ -465,7 +467,7 @@ function DashboardContent() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-[var(--text-primary)]">
-                      ${cat.total.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      {formatAmount(cat.total)}
                     </span>
                     <span className="text-xs text-[var(--text-muted)] w-10 text-right">
                       {cat.percentage}%

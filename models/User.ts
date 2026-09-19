@@ -10,6 +10,7 @@ export interface IUser extends Document {
   sheetsLinked: boolean;
   sheetsSpreadsheetId?: string | null;
   sheetsLastSyncedAt?: Date | null;
+  currency?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +26,7 @@ const UserSchema = new Schema<IUser>(
     sheetsLinked: { type: Boolean, default: false },
     sheetsSpreadsheetId: { type: String, default: null },
     sheetsLastSyncedAt: { type: Date, default: null },
+    currency: { type: String, default: "INR" },
   },
   { timestamps: true }
 );

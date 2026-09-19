@@ -18,10 +18,12 @@ import { Button } from "@/components/ui/Button";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { queueExpenseDeletion } from "@/lib/offline/syncQueue";
+import { useCurrency } from "@/context/CurrencyContext";
 
 type SortOption = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
 
 export default function ExpensesPage() {
+  const { formatAmount, currencyInfo } = useCurrency();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTag, setSelectedTag] = useState("all");
   const [sortBy, setSortBy] = useState<SortOption>("date-desc");
@@ -192,7 +194,7 @@ export default function ExpensesPage() {
                 {/* Left details */}
                 <div className="flex items-start gap-3.5 min-w-0">
                   <div className="w-10 h-10 rounded-2xl bg-black/5 dark:bg-white/5 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 font-serif-display text-base font-semibold">
-                    $
+                    {currencyInfo.symbol}
                   </div>
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -248,7 +250,7 @@ export default function ExpensesPage() {
                 {/* Right amount and actions */}
                 <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-black/5 dark:border-white/5">
                   <span className="text-xl sm:text-2xl font-serif-display font-medium text-[var(--text-primary)]">
-                    ${expense.amount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {formatAmount(expense.amount)}
                   </span>
 
                   <div className="flex items-center gap-1">
