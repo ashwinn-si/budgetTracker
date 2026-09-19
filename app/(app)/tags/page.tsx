@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { GlassCard } from "@/components/ui/GlassCard";
+import { PageHeader } from "@/components/ui/PageHeader";
 
 const PRESET_COLORS = [
   "#22C55E", // Emerald
@@ -131,30 +133,26 @@ export default function TagsPage() {
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            Organize &amp; Classify
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
-            Tags &amp; <em>Categories</em>
-          </h1>
-        </div>
-
-        <Button
-          variant="primary"
-          onClick={() => {
-            setNewTagName("");
-            setError(null);
-            setSelectedColor(PRESET_COLORS[0]);
-            setIsCreating(true);
-          }}
-          icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
-          className="shadow-emerald-500/20 shadow-lg shrink-0"
-        >
-          Add Category
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Organize & Classify"
+        title={<>Tags &amp; <em>Categories</em></>}
+        icon={<TagsIcon className="w-5 h-5" />}
+        actions={
+          <Button
+            variant="primary"
+            onClick={() => {
+              setNewTagName("");
+              setError(null);
+              setSelectedColor(PRESET_COLORS[0]);
+              setIsCreating(true);
+            }}
+            icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+            className="shadow-emerald-500/20 shadow-lg shrink-0"
+          >
+            Add Category
+          </Button>
+        }
+      />
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

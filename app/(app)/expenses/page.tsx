@@ -14,9 +14,11 @@ import {
   Filter,
   ReceiptText,
   ChevronDown,
+  Receipt,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { queueExpenseDeletion } from "@/lib/offline/syncQueue";
@@ -135,25 +137,21 @@ export default function ExpensesPage() {
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            Transaction Ledger
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
-            Expense <em>History</em>
-          </h1>
-        </div>
-
-        <Button
-          variant="primary"
-          onClick={handleNew}
-          icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
-          className="hidden sm:inline-flex shadow-emerald-500/20 shadow-lg"
-        >
-          Add Expense
-        </Button>
-      </div>
+      <PageHeader
+        eyebrow="Transaction Ledger"
+        title={<>Expense <em>History</em></>}
+        icon={<Receipt className="w-5 h-5" />}
+        actions={
+          <Button
+            variant="primary"
+            onClick={handleNew}
+            icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+            className="hidden sm:inline-flex shadow-emerald-500/20 shadow-lg"
+          >
+            Add Expense
+          </Button>
+        }
+      />
 
       {/* Filter and Search Bar */}
       <GlassCard variant="light" className="p-4 space-y-3">

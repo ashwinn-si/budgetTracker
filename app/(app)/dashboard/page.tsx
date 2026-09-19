@@ -12,9 +12,11 @@ import {
   Receipt,
   Tag,
   CalendarDays,
+  LayoutDashboard,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { useSync } from "@/lib/offline/useSync";
@@ -269,52 +271,45 @@ function DashboardContent() {
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* Header & Main Actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
-        <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-            Overview & Spend Analytics
-          </span>
-          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
-            Financial <em>Pacing</em>
-          </h1>
-        </div>
-
-        {/* Action Buttons — desktop only; mobile uses bottom nav + profile page */}
-        <div className="hidden sm:flex items-center gap-2 sm:gap-2.5">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleExcelExport}
-            isLoading={isExporting}
-            icon={<Download className="w-4 h-4" />}
-            className="text-xs sm:text-sm"
-          >
-            Export Excel
-          </Button>
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => syncNow()}
-            isLoading={isSyncing}
-            icon={<RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin text-emerald-500" : ""}`} />}
-            className="text-xs sm:text-sm"
-          >
-            Sync
-          </Button>
-
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setIsAddExpenseOpen(true)}
-            icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
-            className="shadow-emerald-500/20 shadow-lg"
-          >
-            Add Expense
-          </Button>
-        </div>
-      </div>
+      {/* Header */}
+      <PageHeader
+        eyebrow="Overview & Spend Analytics"
+        title={<>Financial <em>Pacing</em></>}
+        icon={<LayoutDashboard className="w-5 h-5" />}
+        actions={
+          <div className="hidden sm:flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleExcelExport}
+              isLoading={isExporting}
+              icon={<Download className="w-4 h-4" />}
+              className="text-xs"
+            >
+              Export
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => syncNow()}
+              isLoading={isSyncing}
+              icon={<RefreshCw className={`w-4 h-4 ${isSyncing ? "animate-spin text-emerald-500" : ""}`} />}
+              className="text-xs"
+            >
+              Sync
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsAddExpenseOpen(true)}
+              icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+              className="shadow-emerald-500/20 shadow-lg"
+            >
+              Add Expense
+            </Button>
+          </div>
+        }
+      />
 
       {/* Filter Bar: Date Presets & Multi-Tag Selector */}
       <GlassCard variant="light" className="p-3 sm:p-3.5 space-y-3">

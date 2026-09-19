@@ -15,9 +15,11 @@ import {
   Coins,
   Download,
   FileDown,
+  UserCircle,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { PageHeader } from "@/components/ui/PageHeader";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useCurrency } from "@/context/CurrencyContext";
@@ -154,14 +156,11 @@ export default function ProfilePage() {
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Header */}
-      <div>
-        <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-          Preferences &amp; Sync Status
-        </span>
-        <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
-          Account <em>Profile</em>
-        </h1>
-      </div>
+      <PageHeader
+        eyebrow="Preferences & Sync Status"
+        title={<>Account <em>Profile</em></>}
+        icon={<UserCircle className="w-5 h-5" />}
+      />
 
       {/* Main grid — items-stretch so both columns are equal height */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
