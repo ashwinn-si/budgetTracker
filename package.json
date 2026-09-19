@@ -6,7 +6,8 @@
     "dev": "next dev -p 5173",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "clear-db": "node scripts/clear-db.js"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.1",
