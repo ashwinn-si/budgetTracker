@@ -10,7 +10,7 @@ import {
   Trash2,
   CheckCircle2,
   Clock,
-  ArrowUpDown,
+  Calendar,
   Filter,
   ReceiptText,
   ChevronDown,
@@ -22,16 +22,15 @@ import { db, LocalExpense } from "@/lib/offline/db";
 import { queueExpenseDeletion } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
 
-type SortOption = "date-desc" | "date-asc" | "amount-desc" | "amount-asc";
-
 export default function ExpensesPage() {
   const { formatAmount, currencyInfo } = useCurrency();
   const searchParams = useSearchParams();
   const tagParam = searchParams.get("tag");
+  const monthParam = searchParams.get("month");
 
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedTag, setSelectedTag] = useState(tagParam || "all");
-  const [sortBy, setSortBy] = useState<SortOption>("date-desc");
+  const [selectedMonth, setSelectedMonth] = useState<string>(monthParam || "all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<LocalExpense | null>(null);
 
@@ -41,6 +40,12 @@ export default function ExpensesPage() {
     }
   }, [tagParam]);
 
+  useEffect(() => {
+    if (monthParam) {
+      setSelectedMonth(monthParam);
+    }
+  }, [monthParam]);
+
   // Live query from Dexie
   const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
   const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
@@ -48,6 +53,42 @@ export default function ExpensesPage() {
   const tagMap = useMemo(() => {
     return new Map(allTags.map((t) => [t._id, t]));
   }, [allTags]);
+
+  // Compute available months dynamically from expenses and recent months
+  const availableMonths = useMemo(() => {
+    const monthsSet = new Set<string>();
+
+    // Include current month and previous 5 months by default
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      monthsSet.add(key);
+    }
+
+    // Include any months from user expenses
+    allExpenses.forEach((exp) => {
+      if (!exp.date) return;
+      const expDate = new Date(exp.date);
+      if (!isNaN(expDate.getTime())) {
+        const key = `${expDate.getFullYear()}-${String(expDate.getMonth() + 1).padStart(2, "0")}`;
+        monthsSet.add(key);
+      }
+    });
+
+    // Sort descending (newest month first)
+    const sorted = Array.from(monthsSet).sort().reverse();
+
+    return sorted.map((key) => {
+      const [year, month] = key.split("-").map(Number);
+      const date = new Date(year, month - 1, 1);
+      const label = date.toLocaleDateString(undefined, {
+        month: "long",
+        year: "numeric",
+      });
+      return { value: key, label };
+    });
+  }, [allExpenses]);
 
   const filteredAndSortedExpenses = useMemo(() => {
     return allExpenses
@@ -61,24 +102,19 @@ export default function ExpensesPage() {
           selectedTag === "all" ||
           (exp.tagIds && exp.tagIds.includes(selectedTag));
 
-        return matchesSearch && matchesTag;
+        const matchesMonth =
+          selectedMonth === "all" ||
+          (() => {
+            const expDate = new Date(exp.date);
+            if (isNaN(expDate.getTime())) return false;
+            const key = `${expDate.getFullYear()}-${String(expDate.getMonth() + 1).padStart(2, "0")}`;
+            return key === selectedMonth;
+          })();
+
+        return matchesSearch && matchesTag && matchesMonth;
       })
-      .sort((a, b) => {
-        if (sortBy === "date-desc") {
-          return new Date(b.date).getTime() - new Date(a.date).getTime();
-        }
-        if (sortBy === "date-asc") {
-          return new Date(a.date).getTime() - new Date(b.date).getTime();
-        }
-        if (sortBy === "amount-desc") {
-          return b.amount - a.amount;
-        }
-        if (sortBy === "amount-asc") {
-          return a.amount - b.amount;
-        }
-        return 0;
-      });
-  }, [allExpenses, searchTerm, selectedTag, sortBy]);
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [allExpenses, searchTerm, selectedTag, selectedMonth]);
 
   const handleDelete = async (clientId: string) => {
     if (confirm("Are you sure you want to delete this expense?")) {
@@ -152,18 +188,20 @@ export default function ExpensesPage() {
             <ChevronDown className="w-4 h-4 text-[var(--text-muted)] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-[var(--text-primary)] transition-colors" />
           </div>
 
-          {/* Sort selector */}
+          {/* Month selector */}
           <div className="sm:col-span-3 relative group">
-            <ArrowUpDown className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-emerald-500 transition-colors" />
+            <Calendar className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-emerald-500 transition-colors" />
             <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
               className="w-full appearance-none pl-10 pr-9 py-2.5 text-xs sm:text-sm font-medium bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 text-[var(--text-primary)] cursor-pointer hover:bg-white/80 dark:hover:bg-black/60 transition-all shadow-xs"
             >
-              <option value="date-desc">Newest First</option>
-              <option value="date-asc">Oldest First</option>
-              <option value="amount-desc">Highest Amount</option>
-              <option value="amount-asc">Lowest Amount</option>
+              <option value="all">All Months</option>
+              {availableMonths.map((m) => (
+                <option key={m.value} value={m.value}>
+                  {m.label}
+                </option>
+              ))}
             </select>
             <ChevronDown className="w-4 h-4 text-[var(--text-muted)] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-[var(--text-primary)] transition-colors" />
           </div>
@@ -180,8 +218,8 @@ export default function ExpensesPage() {
             No expenses found
           </h3>
           <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
-            {searchTerm || selectedTag !== "all"
-              ? "Try adjusting your search terms or category filters."
+            {searchTerm || selectedTag !== "all" || selectedMonth !== "all"
+              ? "Try adjusting your search terms, category, or month filters."
               : "Start tracking your spending by adding your first transaction."}
           </p>
           <Button variant="accent-ghost" size="sm" onClick={handleNew}>
