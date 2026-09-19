@@ -3,64 +3,30 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
-  User as UserIcon,
-  Tag as TagIcon,
   CloudUpload,
   FileSpreadsheet,
   KeyRound,
-  Trash2,
-  Edit2,
-  Plus,
-  Check,
   RefreshCw,
   Sun,
   Moon,
   Laptop,
   CheckCircle2,
-  AlertTriangle,
   ExternalLink,
   Coins,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
-import { Modal } from "@/components/ui/Modal";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { useSync } from "@/lib/offline/useSync";
-import { db, LocalTag } from "@/lib/offline/db";
-import { queueTagCreation, queueTagDeletion } from "@/lib/offline/syncQueue";
 
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, formatAmount } = useCurrency();
   const { status, pendingCount, lastSyncedAt, syncNow, isSyncing } = useSync();
-
-  // Tags from Dexie
-  const tags = useLiveQuery(() => db.tags.toArray(), []) || [];
-  const expenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
-
-  // Count expenses per tag
-  const tagUsageCount = useMemo(() => {
-    const counts: Record<string, number> = {};
-    expenses.forEach((exp) => {
-      exp.tagIds?.forEach((tId) => {
-        counts[tId] = (counts[tId] || 0) + 1;
-      });
-    });
-    return counts;
-  }, [expenses]);
-
-  // Tag creation / editing state
-  const [isTagModalOpen, setIsTagModalOpen] = useState(false);
-  const [editingTag, setEditingTag] = useState<LocalTag | null>(null);
-  const [tagName, setTagName] = useState("");
-  const [tagColor, setTagColor] = useState("#22C55E");
-
-  // Tag delete confirmation
-  const [deletingTagId, setDeletingTagId] = useState<string | null>(null);
 
   // Sheets sync state
   const [isSheetsSyncing, setIsSheetsSyncing] = useState(false);
@@ -114,54 +80,6 @@ export default function ProfilePage() {
   const [isResetRequested, setIsResetRequested] = useState(false);
   const [devResetLink, setDevResetLink] = useState<string | null>(null);
 
-  const colorPalette = [
-    "#22C55E",
-    "#3B82F6",
-    "#F59E0B",
-    "#EC4899",
-    "#8B5CF6",
-    "#14B8A6",
-    "#6366F1",
-    "#E11D48",
-  ];
-
-  const handleOpenTagModal = (tag?: LocalTag) => {
-    if (tag) {
-      setEditingTag(tag);
-      setTagName(tag.name);
-      setTagColor(tag.colorKey);
-    } else {
-      setEditingTag(null);
-      setTagName("");
-      setTagColor("#22C55E");
-    }
-    setIsTagModalOpen(true);
-  };
-
-  const handleSaveTag = async () => {
-    if (!tagName.trim()) return;
-
-    if (editingTag) {
-      const updated: LocalTag = { ...editingTag, name: tagName.trim(), colorKey: tagColor };
-      await db.tags.put(updated);
-    } else {
-      const newTag: LocalTag = {
-        _id: `tag_${Date.now()}`,
-        userId: user?.id || "local_user",
-        name: tagName.trim(),
-        colorKey: tagColor,
-      };
-      await queueTagCreation(newTag);
-    }
-
-    setIsTagModalOpen(false);
-  };
-
-  const handleDeleteTag = async (tagId: string) => {
-    await queueTagDeletion(tagId);
-    setDeletingTagId(null);
-  };
-
   const handleSyncGoogleSheets = async () => {
     setIsSheetsSyncing(true);
     setSheetsMessage(null);
@@ -209,22 +127,25 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 pb-24 sm:pb-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header */}
       <div>
         <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
-          Preferences & Sync Status
+          Preferences &amp; Sync Status
         </span>
         <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
           Account <em>Profile</em>
         </h1>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* User Card */}
-        <GlassCard variant="strong" className="lg:col-span-6 p-6 sm:p-7 space-y-6">
+      {/* Main grid — items-stretch so both columns are equal height */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+
+        {/* ── Left: User & Preferences ── */}
+        <GlassCard variant="strong" className="p-6 sm:p-7 space-y-6 h-full">
+          {/* Avatar + name */}
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-serif-display text-2xl font-bold flex items-center justify-center border border-emerald-500/30 shadow-md">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-serif-display text-2xl font-bold flex items-center justify-center border border-emerald-500/30 shadow-md shrink-0">
               {user?.name ? user.name[0].toUpperCase() : "A"}
             </div>
             <div className="min-w-0">
@@ -273,7 +194,7 @@ export default function ProfilePage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2">
               <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] flex items-center gap-1.5 whitespace-nowrap">
                 <Coins className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                <span>Currency & Regional Unit</span>
+                <span>Currency &amp; Regional Unit</span>
               </label>
               <div className="self-start sm:self-auto inline-flex items-center gap-1.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2.5 py-0.5 rounded-full border border-emerald-500/20 font-serif-display whitespace-nowrap shadow-2xs">
                 <span className="text-[10px] uppercase font-sans font-medium text-emerald-600/70 dark:text-emerald-400/70">
@@ -316,7 +237,7 @@ export default function ProfilePage() {
               <div>
                 <h3 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-1.5">
                   <KeyRound className="w-4 h-4 text-emerald-500" />
-                  <span>Security & Password</span>
+                  <span>Security &amp; Password</span>
                 </h3>
                 <p className="text-xs text-[var(--text-muted)]">
                   Dispatch a secure reset token link.
@@ -358,8 +279,8 @@ export default function ProfilePage() {
           </div>
         </GlassCard>
 
-        {/* Right Column: Sync & Integrations */}
-        <div className="lg:col-span-6 space-y-6">
+        {/* ── Right: Sync & Integrations ── */}
+        <div className="space-y-6">
           {/* Offline Sync Status */}
           <GlassCard variant="mid" className="p-6 space-y-4">
             <div className="flex items-center justify-between">
@@ -471,7 +392,6 @@ export default function ProfilePage() {
                 </div>
               )}
 
-              {/* Always show spreadsheet link and Open button */}
               {activeSheetsUrl ? (
                 <div className="pt-2.5 border-t border-black/5 dark:border-white/5 space-y-2">
                   <div className="flex items-center justify-between text-xs">
@@ -530,153 +450,6 @@ export default function ProfilePage() {
           </GlassCard>
         </div>
       </div>
-
-      {/* Tag Management Section */}
-      <GlassCard variant="mid" className="p-6 sm:p-7 space-y-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)]">
-              Tag Management
-            </h2>
-            <p className="text-xs text-[var(--text-muted)]">
-              Organize expense categories and custom colors
-            </p>
-          </div>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => handleOpenTagModal()}
-            icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
-          >
-            New Tag
-          </Button>
-        </div>
-
-        <div className="max-h-72 sm:max-h-80 overflow-y-auto pr-1.5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {tags.map((tag) => {
-            return (
-              <div
-                key={tag._id}
-                className="p-3.5 rounded-2xl glass-light border border-white/50 dark:border-white/10 flex items-center justify-between gap-3 shadow-2xs hover:border-emerald-500/30 transition-all"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span
-                    className="w-4 h-4 rounded-full shrink-0 shadow-xs ring-1 ring-black/10 dark:ring-white/20"
-                    style={{ backgroundColor: tag.colorKey }}
-                  />
-                  <p className="font-semibold text-xs sm:text-sm text-[var(--text-primary)] truncate">
-                    {tag.name}
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => handleOpenTagModal(tag)}
-                    aria-label="Edit tag"
-                    title="Edit category"
-                    className="min-h-[34px] min-w-[34px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors cursor-pointer"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setDeletingTagId(tag._id)}
-                    aria-label="Delete tag"
-                    title="Delete category"
-                    className="min-h-[34px] min-w-[34px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </GlassCard>
-
-      {/* Tag Edit/Create Modal */}
-      <Modal
-        isOpen={isTagModalOpen}
-        onClose={() => setIsTagModalOpen(false)}
-        title={editingTag ? "Edit Category Tag" : "Create New Tag"}
-        subtitle="Tags allow you to filter and analyze expenses effortlessly."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setIsTagModalOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" onClick={handleSaveTag}>
-              Save Tag
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
-              Tag Name
-            </label>
-            <input
-              type="text"
-              placeholder="e.g. Subscriptions or Utilities"
-              value={tagName}
-              onChange={(e) => setTagName(e.target.value)}
-              className="w-full px-4 py-3 text-sm font-medium bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 shadow-xs transition-all"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
-              Color Accent
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              {colorPalette.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setTagColor(c)}
-                  className={`w-7 h-7 rounded-full transition-transform ${
-                    tagColor === c ? "scale-125 ring-2 ring-emerald-500" : "opacity-80"
-                  }`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        isOpen={!!deletingTagId}
-        onClose={() => setDeletingTagId(null)}
-        title="Delete Tag?"
-        subtitle="This action will remove the tag from associated transactions."
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setDeletingTagId(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="danger"
-              onClick={() => deletingTagId && handleDeleteTag(deletingTagId)}
-            >
-              Confirm Delete
-            </Button>
-          </>
-        }
-      >
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-xs sm:text-sm text-amber-800 dark:text-amber-300 flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 shrink-0 text-amber-500 mt-0.5" />
-          <div>
-            <p className="font-semibold">
-              Warning: {tagUsageCount[deletingTagId || ""] || 0} expense(s) currently use this tag.
-            </p>
-            <p className="mt-1 text-xs opacity-90">
-              Deleting this tag will un-tag those expenses, but will not delete the expenses themselves.
-            </p>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }

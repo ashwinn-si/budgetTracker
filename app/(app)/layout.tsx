@@ -34,18 +34,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      {/* Outer shell: fixed to 100vh — background never scrolls */}
+      <div className="h-screen overflow-hidden flex w-full">
         {/* Desktop Sidebar */}
         <Sidebar />
 
         {/* Main Content Area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {/* Top Navbar */}
           <Navbar />
 
-          {/* Page Content */}
-          <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
-            {children}
+          {/* Page Content — only this scrolls */}
+          <main className="flex-1 overflow-y-auto w-full">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-24 sm:pb-8">
+              {children}
+            </div>
           </main>
         </div>
 

@@ -5,25 +5,24 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useLiveQuery } from "dexie-react-hooks";
 import {
   Download,
-  TrendingDown,
-  TrendingUp,
   Layers,
   Plus,
   RefreshCw,
+  Wallet,
+  Receipt,
+  Tag,
+  CalendarDays,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
-import { Ring } from "@/components/ui/Ring";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { useSync } from "@/lib/offline/useSync";
 import { useLoading } from "@/context/LoadingContext";
 import { useCurrency } from "@/context/CurrencyContext";
-import { calculatePacing } from "@/lib/analytics/pacing";
 import { SpendingActivityChart } from "@/components/dashboard/SpendingActivityChart";
 import { DateRangeFilter, PeriodPreset } from "@/components/dashboard/DateRangeFilter";
 import { TagFilter } from "@/components/dashboard/TagFilter";
-import { QuickStatChips } from "@/components/dashboard/QuickStatChips";
 
 function DashboardContent() {
   const router = useRouter();
@@ -126,20 +125,23 @@ function DashboardContent() {
     return currentExpenses.reduce((sum, e) => sum + e.amount, 0);
   }, [currentExpenses]);
 
-  const prevTotalSpend = useMemo(() => {
-    return prevExpenses.reduce((sum, e) => sum + e.amount, 0);
-  }, [prevExpenses]);
+  // Days elapsed in current period (for avg/day)
+  const elapsedDays = useMemo(() => {
+    const now = new Date();
+    const start = dateRanges.start;
+    const end = dateRanges.end < now ? dateRanges.end : now;
+    const diff = Math.max(1, Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1);
+    return diff;
+  }, [dateRanges]);
 
-  // Pacing Calculation
-  const pacing = useMemo(() => {
-    return calculatePacing(totalSpend, prevTotalSpend, dateRanges.start, dateRanges.end);
-  }, [totalSpend, prevTotalSpend, dateRanges]);
+  const avgPerDay = useMemo(() => {
+    return elapsedDays > 0 ? totalSpend / elapsedDays : 0;
+  }, [totalSpend, elapsedDays]);
 
-  // Percentage comparison
-  const spendComparisonPercentage = useMemo(() => {
-    if (prevTotalSpend <= 0) return 0;
-    return Math.round(((totalSpend - prevTotalSpend) / prevTotalSpend) * 100);
-  }, [totalSpend, prevTotalSpend]);
+  const largestExpense = useMemo(() => {
+    if (currentExpenses.length === 0) return 0;
+    return Math.max(...currentExpenses.map((e) => e.amount));
+  }, [currentExpenses]);
 
   // Tag Breakdown
   const categoryBreakdown = useMemo(() => {
@@ -266,7 +268,7 @@ function DashboardContent() {
   };
 
   return (
-    <div className="space-y-6 sm:space-y-8 pb-20 sm:pb-8">
+    <div className="space-y-6 sm:space-y-8">
       {/* Header & Main Actions */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 sm:gap-4">
         <div>
@@ -341,96 +343,86 @@ function DashboardContent() {
         )}
       </GlassCard>
 
-      {/* Quick-Stat Chips Row */}
-      <QuickStatChips
-        totalSpend={totalSpend}
-        transactionCount={currentExpenses.length}
-        largestExpense={currentExpenses.length > 0 ? Math.max(...currentExpenses.map((e) => e.amount)) : 0}
-        topCategoryName={categoryBreakdown[0]?.name || ""}
-        elapsedDays={pacing.elapsedDays}
-        currencySymbol={currencyInfo.symbol}
-      />
 
-      {/* Hero Section: Pacing Ring + Spending Activity Chart */}
+      {/* Hero Section: Summary Stats + Spending Activity Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Pacing Ring Card */}
+        {/* Summary Stats Card */}
         <GlassCard
           variant="strong"
-          className="lg:col-span-5 flex flex-col items-center justify-center text-center p-8 relative overflow-hidden"
+          className="lg:col-span-5 p-6 sm:p-7 flex flex-col gap-5"
         >
-          <span className="text-xs font-semibold uppercase tracking-widest text-[var(--text-muted)] mb-2">
-            Spend Velocity vs Baseline
-          </span>
-
-          <div className="my-3">
-            {!pacing.hasBaseline ? (
-              <Ring
-                percentage={0}
-                size={190}
-                strokeWidth={12}
-                centerContent={
-                  <>
-                    <span className="text-2xl sm:text-3xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
-                      {formatAmount(totalSpend)}
-                    </span>
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] mt-1">
-                      Total Spent
-                    </span>
-                    <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
-                      First tracked period
-                    </span>
-                  </>
-                }
-              />
-            ) : (
-              <Ring
-                percentage={pacing.pacingPercent || 0}
-                size={190}
-                strokeWidth={12}
-                label="Pacing"
-                sublabel={`vs ${formatAmount(prevTotalSpend)}`}
-              />
-            )}
+          <div>
+            <span className="text-xs font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
+              Period Summary
+            </span>
+            <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)] mt-0.5">
+              Spend at a Glance
+            </h2>
           </div>
 
-          <div className="mt-4 w-full pt-4 border-t border-black/5 dark:border-white/5 flex items-center justify-around">
-            <div>
-              <span className="text-xs text-[var(--text-muted)] block">Current Total</span>
-              <span className="text-2xl font-serif-display font-semibold text-[var(--text-primary)]">
-                {formatAmount(totalSpend)}
+          {/* 2×2 stat grid */}
+          <div className="grid grid-cols-2 gap-3 flex-1">
+            {/* Total Spend */}
+            <div className="flex flex-col justify-between p-4 rounded-2xl bg-emerald-500/[0.07] dark:bg-emerald-500/[0.1] border border-emerald-500/20">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-700 dark:text-emerald-400">Total Spend</span>
+                <div className="w-7 h-7 rounded-xl bg-emerald-500/15 flex items-center justify-center">
+                  <Wallet className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+              </div>
+              <span className="text-2xl font-serif-display font-semibold text-[var(--text-primary)] leading-none">
+                {currentExpenses.length > 0 ? formatAmount(totalSpend) : "—"}
+              </span>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5">this period</span>
+            </div>
+
+            {/* Transactions */}
+            <div className="flex flex-col justify-between p-4 rounded-2xl bg-teal-500/[0.07] dark:bg-teal-500/[0.1] border border-teal-500/20">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-teal-700 dark:text-teal-400">Transactions</span>
+                <div className="w-7 h-7 rounded-xl bg-teal-500/15 flex items-center justify-center">
+                  <Receipt className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                </div>
+              </div>
+              <span className="text-2xl font-serif-display font-semibold text-[var(--text-primary)] leading-none">
+                {currentExpenses.length > 0 ? currentExpenses.length : "—"}
+              </span>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                {currentExpenses.length === 1 ? "expense logged" : "expenses logged"}
               </span>
             </div>
 
-            <div className="h-8 w-px bg-black/10 dark:bg-white/10" />
-
-            <div>
-              <span className="text-xs text-[var(--text-muted)] block">
-                {pacing.hasBaseline ? "Change" : "Baseline"}
-              </span>
-              {pacing.hasBaseline ? (
-                <div
-                  className={`inline-flex items-center gap-1 text-sm font-semibold mt-0.5 ${
-                    spendComparisonPercentage <= 0
-                      ? "text-emerald-600 dark:text-emerald-400"
-                      : "text-amber-600 dark:text-amber-400"
-                  }`}
-                >
-                  {spendComparisonPercentage <= 0 ? (
-                    <TrendingDown className="w-4 h-4" />
-                  ) : (
-                    <TrendingUp className="w-4 h-4" />
-                  )}
-                  <span>
-                    {spendComparisonPercentage > 0
-                      ? `+${spendComparisonPercentage}%`
-                      : `${spendComparisonPercentage}%`}
-                  </span>
+            {/* Top Category */}
+            <div className="flex flex-col justify-between p-4 rounded-2xl bg-indigo-500/[0.07] dark:bg-indigo-500/[0.1] border border-indigo-500/20">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-700 dark:text-indigo-400">Top Category</span>
+                <div className="w-7 h-7 rounded-xl bg-indigo-500/15 flex items-center justify-center">
+                  <Tag className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 </div>
-              ) : (
-                <span className="text-xs font-medium text-[var(--text-muted)] mt-1 block">
-                  No prior period
-                </span>
-              )}
+              </div>
+              <span
+                className="text-base font-serif-display font-semibold text-[var(--text-primary)] leading-snug truncate"
+                title={categoryBreakdown[0]?.name || "—"}
+              >
+                {categoryBreakdown[0]?.name || "—"}
+              </span>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5">
+                {categoryBreakdown[0] ? `${categoryBreakdown[0].percentage}% of spend` : "no data yet"}
+              </span>
+            </div>
+
+            {/* Avg / Day */}
+            <div className="flex flex-col justify-between p-4 rounded-2xl bg-amber-500/[0.07] dark:bg-amber-500/[0.1] border border-amber-500/20">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">Avg / Day</span>
+                <div className="w-7 h-7 rounded-xl bg-amber-500/15 flex items-center justify-center">
+                  <CalendarDays className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                </div>
+              </div>
+              <span className="text-2xl font-serif-display font-semibold text-[var(--text-primary)] leading-none">
+                {currentExpenses.length > 0 ? formatAmount(avgPerDay) : "—"}
+              </span>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5">{elapsedDays}d elapsed</span>
             </div>
           </div>
         </GlassCard>

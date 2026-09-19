@@ -129,21 +129,16 @@ export default function TagsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-24 lg:pb-12 max-w-6xl mx-auto">
-      {/* Header Banner */}
+    <div className="space-y-6 max-w-6xl mx-auto">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
-            <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-              <TagsIcon className="w-5 h-5" />
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-heading font-bold text-[var(--text-primary)]">
-              Tags & Categories
-            </h1>
-          </div>
-          <p className="text-sm text-[var(--text-muted)] mt-1">
-            Organize, categorize, and visually group your expenses.
-          </p>
+          <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
+            Organize &amp; Classify
+          </span>
+          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
+            Tags &amp; <em>Categories</em>
+          </h1>
         </div>
 
         <Button
