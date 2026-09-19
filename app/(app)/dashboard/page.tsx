@@ -25,6 +25,7 @@ import {
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { Ring } from "@/components/ui/Ring";
+import { motion } from "motion/react";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { useSync } from "@/lib/offline/useSync";
@@ -267,7 +268,7 @@ function DashboardContent() {
       {/* Interactive Filter Bar */}
       <GlassCard variant="light" className="p-3 sm:p-3.5 flex flex-wrap items-center justify-between gap-3">
         {/* Period Selector Tabs */}
-        <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-black/5 dark:bg-white/5">
+        <div className="flex items-center gap-1 p-1 rounded-2xl bg-black/[0.04] dark:bg-white/[0.06] border border-black/[0.04] dark:border-white/10 relative">
           {[
             { id: "month", label: "This Month" },
             { id: "last30", label: "Last 30 Days" },
@@ -278,13 +279,20 @@ function DashboardContent() {
               <button
                 key={item.id}
                 onClick={() => updateFilters(item.id, selectedTagParam)}
-                className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                className={`relative min-h-[36px] px-4 py-1.5 rounded-xl text-xs font-medium transition-colors duration-150 cursor-pointer select-none ${
                   active
-                    ? "bg-white dark:bg-neutral-800 text-[var(--text-primary)] font-semibold shadow-sm"
+                    ? "text-white font-semibold"
                     : "text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                 }`}
               >
-                {item.label}
+                {active && (
+                  <motion.div
+                    layoutId="activeDashboardPeriodTab"
+                    className="absolute inset-0 bg-emerald-500 rounded-xl shadow-md shadow-emerald-500/25"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
+                <span className="relative z-10 font-heading tracking-tight">{item.label}</span>
               </button>
             );
           })}
