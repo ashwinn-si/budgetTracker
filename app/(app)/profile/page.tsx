@@ -444,7 +444,7 @@ export default function ProfilePage() {
               placeholder="e.g. Subscriptions or Utilities"
               value={tagName}
               onChange={(e) => setTagName(e.target.value)}
-              className="w-full px-3.5 py-2.5 text-sm bg-white/50 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-2 focus:ring-emerald-500/50"
+              className="w-full px-4 py-3 text-sm font-medium bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 shadow-xs transition-all"
             />
           </div>
 

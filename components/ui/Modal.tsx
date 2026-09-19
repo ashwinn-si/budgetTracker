@@ -81,22 +81,26 @@ export function Modal({
                 onClose();
               }
             }}
-            className={`relative z-10 w-full ${maxWidthClasses[maxWidth]} glass-strong border border-white/60 dark:border-white/10 rounded-t-[28px] sm:rounded-3xl max-h-[88vh] sm:max-h-[85vh] flex flex-col shadow-2xl overflow-hidden`}
+            className={`relative z-10 w-full ${maxWidthClasses[maxWidth]} bg-gradient-to-b from-white/95 via-[#F8FAF8]/92 to-[#EEF5EF]/95 dark:from-[#112017]/95 dark:via-[#0E1A13]/95 dark:to-[#0A140F]/95 backdrop-blur-2xl border border-white/80 dark:border-emerald-500/20 rounded-t-[28px] sm:rounded-3xl max-h-[90vh] sm:max-h-[85vh] flex flex-col shadow-[0_25px_60px_-15px_rgba(20,50,30,0.2),0_0_40px_rgba(34,197,94,0.1)] overflow-hidden`}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Ambient Background Gradient Orbs */}
+            <div className="absolute -top-20 -right-20 w-56 h-56 bg-emerald-400/20 dark:bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-teal-400/15 dark:bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
+
             {/* Mobile Drag Handle Bar */}
-            <div className="flex justify-center pt-2.5 pb-1 sm:hidden cursor-grab active:cursor-grabbing">
-              <div className="w-12 h-1.5 rounded-full bg-neutral-400/40 dark:bg-neutral-600/50" />
+            <div className="flex justify-center pt-3 pb-1 sm:hidden cursor-grab active:cursor-grabbing relative z-10">
+              <div className="w-12 h-1.5 rounded-full bg-neutral-300/80 dark:bg-neutral-600/60" />
             </div>
 
             {/* Modal Header */}
-            <div className="flex items-start justify-between px-6 pt-3 sm:pt-6 pb-3 border-b border-black/5 dark:border-white/5">
+            <div className="flex items-start justify-between px-6 pt-3 sm:pt-6 pb-4 border-b border-black/[0.06] dark:border-white/10 bg-white/40 dark:bg-white/[0.02] backdrop-blur-md relative z-10">
               <div>
-                <h2 className="text-xl sm:text-2xl font-heading font-semibold text-[var(--text-primary)]">
+                <h2 className="text-xl sm:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight">
                   {title}
                 </h2>
                 {subtitle && (
-                  <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-0.5 font-sans">
+                  <p className="text-xs sm:text-sm text-[var(--text-secondary)] mt-1 font-sans leading-relaxed">
                     {subtitle}
                   </p>
                 )}
@@ -104,20 +108,20 @@ export function Modal({
               <button
                 onClick={onClose}
                 aria-label="Close modal"
-                className="min-h-[44px] min-w-[44px] flex items-center justify-center -mr-2 -mt-1 rounded-full text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                className="min-h-[40px] min-w-[40px] flex items-center justify-center -mr-2 -mt-1 rounded-2xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-black/[0.05] dark:hover:bg-white/10 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Body with internal scroll */}
-            <div className="px-6 py-4 overflow-y-auto flex-1 text-[var(--text-secondary)] space-y-4">
+            <div className="px-6 py-5 overflow-y-auto flex-1 text-[var(--text-secondary)] space-y-4 relative z-10">
               {children}
             </div>
 
             {/* Modal Sticky Footer (Thumb reachable on mobile) */}
             {footer && (
-              <div className="px-6 py-3.5 sm:py-4 border-t border-black/5 dark:border-white/5 bg-white/20 dark:bg-black/20 backdrop-blur-md pb-[calc(0.875rem+env(safe-area-inset-bottom,0px))] sm:pb-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
+              <div className="px-6 py-4 border-t border-black/[0.06] dark:border-white/10 bg-white/60 dark:bg-black/30 backdrop-blur-xl pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 relative z-10">
                 {footer}
               </div>
             )}
