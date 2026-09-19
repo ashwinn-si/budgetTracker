@@ -7,6 +7,7 @@ import {
   Search,
   Plus,
   Edit2,
+  Pencil,
   Trash2,
   CheckCircle2,
   Clock,
@@ -14,6 +15,8 @@ import {
   Filter,
   ReceiptText,
   ChevronDown,
+  PiggyBank,
+  ArrowDownLeft,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -244,14 +247,38 @@ export default function ExpensesPage() {
               >
                 {/* Left details */}
                 <div className="flex items-start gap-3.5 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-black/5 dark:bg-white/5 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0 font-serif-display text-base font-semibold">
-                    {currencyInfo.symbol}
-                  </div>
+                {/* Icon — savings-aware */}
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                  expense.isSaving
+                    ? "bg-teal-500/10 text-teal-600 dark:text-teal-400"
+                    : expense.fromSavings
+                    ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                    : "bg-black/5 dark:bg-white/5 text-emerald-600 dark:text-emerald-400 font-serif-display text-base font-semibold"
+                }`}>
+                  {expense.isSaving ? (
+                    <PiggyBank className="w-5 h-5" />
+                  ) : expense.fromSavings ? (
+                    <ArrowDownLeft className="w-5 h-5" />
+                  ) : (
+                    currencyInfo.symbol
+                  )}
+                </div>
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-semibold text-sm sm:text-base text-[var(--text-primary)] truncate">
                         {expense.note || "No description"}
                       </h4>
+                      {/* Savings badge */}
+                      {expense.isSaving && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-teal-500/10 text-teal-700 dark:text-teal-300 border border-teal-500/20">
+                          <PiggyBank className="w-2.5 h-2.5" /> Saving
+                        </span>
+                      )}
+                      {expense.fromSavings && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/20">
+                          <ArrowDownLeft className="w-2.5 h-2.5" /> From Savings
+                        </span>
+                      )}
                       {/* Sync Status Badge */}
                       {expense.syncStatus === "synced" ? (
                         <span

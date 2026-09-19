@@ -63,8 +63,25 @@ export function ExpenseFormModal({
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [fromSavings, setFromSavings] = useState<boolean>(false);
 
-  // Live tags from Dexie
-  const tags = useLiveQuery(() => db.tags.toArray(), []) || [];
+  // Live tags from Dexie — deduplicated by lowercase name to avoid server+local duplicates
+  const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
+  const tags = useMemo(() => {
+    const seen = new Set<string>();
+    return rawTags.filter((t) => {
+      const key = t.name.toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [rawTags]);
+
+  // Live savings balance (all-time) to display inside the modal
+  const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const savingsBalance = useMemo(() => {
+    const saved = allExpenses.filter((e) => e.isSaving).reduce((s, e) => s + e.amount, 0);
+    const withdrawn = allExpenses.filter((e) => e.fromSavings).reduce((s, e) => s + e.amount, 0);
+    return saved - withdrawn;
+  }, [allExpenses]);
 
   useEffect(() => {
     if (initialExpense) {
@@ -393,44 +410,86 @@ export function ExpenseFormModal({
             <PiggyBank className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
             <span>Savings</span>
           </label>
-          <div className="flex flex-wrap gap-2">
-            {/* Saving toggle */}
+
+          <div className="grid grid-cols-2 gap-2">
+            {/* Adding to savings card */}
             <button
               type="button"
               onClick={() => { setIsSaving(!isSaving); if (!isSaving) setFromSavings(false); }}
-              className={`min-h-[36px] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+              className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 isSaving
-                  ? "bg-teal-500 border-teal-500 text-white shadow-md shadow-teal-500/25"
-                  : "bg-white/60 dark:bg-white/[0.06] border-black/[0.08] dark:border-white/10 text-[var(--text-secondary)] hover:border-teal-400/50 hover:bg-teal-50 dark:hover:bg-teal-500/10"
+                  ? "bg-teal-500/10 border-teal-500/50 dark:bg-teal-500/15 dark:border-teal-400/40"
+                  : "bg-white/50 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 hover:border-teal-400/40 hover:bg-teal-50/50 dark:hover:bg-teal-500/8"
               }`}
             >
-              <PiggyBank className="w-3.5 h-3.5" />
-              <span>Adding to savings</span>
-              {isSaving && <Check className="w-3.5 h-3.5 ml-0.5 stroke-[2.5]" />}
+              <div className="flex items-center justify-between w-full">
+                <div className={`w-7 h-7 rounded-xl flex items-center justify-center ${
+                  isSaving ? "bg-teal-500 text-white" : "bg-teal-500/10 text-teal-600 dark:text-teal-400"
+                }`}>
+                  <PiggyBank className="w-3.5 h-3.5" />
+                </div>
+                {isSaving && (
+                  <div className="w-4 h-4 rounded-full bg-teal-500 flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                  </div>
+                )}
+              </div>
+              <span className={`text-xs font-semibold leading-tight ${
+                isSaving ? "text-teal-700 dark:text-teal-300" : "text-[var(--text-primary)]"
+              }`}>Adding to savings</span>
+              <span className="text-[10px] text-[var(--text-muted)] leading-tight">
+                Amount goes into your savings balance
+              </span>
             </button>
 
-            {/* From Savings toggle */}
+            {/* From Savings card */}
             <button
               type="button"
               onClick={() => { setFromSavings(!fromSavings); if (!fromSavings) setIsSaving(false); }}
-              className={`min-h-[36px] px-4 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+              className={`flex flex-col items-start gap-1.5 p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
                 fromSavings
-                  ? "bg-amber-500 border-amber-500 text-white shadow-md shadow-amber-500/25"
-                  : "bg-white/60 dark:bg-white/[0.06] border-black/[0.08] dark:border-white/10 text-[var(--text-secondary)] hover:border-amber-400/50 hover:bg-amber-50 dark:hover:bg-amber-500/10"
+                  ? "bg-amber-500/10 border-amber-500/50 dark:bg-amber-500/15 dark:border-amber-400/40"
+                  : "bg-white/50 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-500/8"
               }`}
             >
-              <ArrowDownLeft className="w-3.5 h-3.5" />
-              <span>Spending from savings</span>
-              {fromSavings && <Check className="w-3.5 h-3.5 ml-0.5 stroke-[2.5]" />}
+              <div className="flex items-center justify-between w-full">
+                <div className={`w-7 h-7 rounded-xl flex items-center justify-center ${
+                  fromSavings ? "bg-amber-500 text-white" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                }`}>
+                  <ArrowDownLeft className="w-3.5 h-3.5" />
+                </div>
+                {fromSavings && (
+                  <div className="w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center">
+                    <Check className="w-2.5 h-2.5 text-white stroke-[3]" />
+                  </div>
+                )}
+              </div>
+              <span className={`text-xs font-semibold leading-tight ${
+                fromSavings ? "text-amber-700 dark:text-amber-300" : "text-[var(--text-primary)]"
+              }`}>From savings</span>
+              <span className="text-[10px] text-[var(--text-muted)] leading-tight">
+                Paid out of your savings balance
+              </span>
             </button>
           </div>
 
+          {/* Live savings balance — shown when a toggle is active */}
           {(isSaving || fromSavings) && (
-            <p className="text-[11px] text-[var(--text-muted)] pl-0.5">
-              {isSaving
-                ? "This amount will be added to your savings balance."
-                : "This expense will be deducted from your savings balance."}
-            </p>
+            <div className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl border ${
+              savingsBalance >= 0
+                ? "bg-teal-500/[0.06] border-teal-500/20"
+                : "bg-rose-500/[0.06] border-rose-500/20"
+            }`}>
+              <div className="flex items-center gap-2">
+                <PiggyBank className={`w-3.5 h-3.5 ${savingsBalance >= 0 ? "text-teal-600 dark:text-teal-400" : "text-rose-500"}`} />
+                <span className="text-[11px] text-[var(--text-muted)]">Current savings balance</span>
+              </div>
+              <span className={`text-sm font-semibold font-serif-display ${
+                savingsBalance >= 0 ? "text-teal-700 dark:text-teal-300" : "text-rose-600 dark:text-rose-400"
+              }`}>
+                {savingsBalance >= 0 ? "+" : ""}{currencyInfo.symbol}{Math.abs(savingsBalance).toLocaleString()}
+              </span>
+            </div>
           )}
         </div>
       </form>
