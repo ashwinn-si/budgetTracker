@@ -132,7 +132,7 @@ export default function SavingsPage() {
             <PiggyBank className="w-3.5 h-3.5" />
             <span>Financial Vault</span>
           </span>
-          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight mt-1">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight mt-1">
             Savings & <em>Reserves</em>
           </h1>
           <p className="text-xs sm:text-sm text-[var(--text-muted)] mt-1">
@@ -171,7 +171,7 @@ export default function SavingsPage() {
 
           <div className="mt-4">
             <h2
-              className={`text-3xl sm:text-4xl font-serif-display font-bold tracking-tight ${
+              className={`text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold tracking-tight ${
                 balance >= 0 ? "text-teal-600 dark:text-teal-400" : "text-rose-500"
               }`}
             >
@@ -201,7 +201,7 @@ export default function SavingsPage() {
           </div>
 
           <div className="mt-4">
-            <p className="text-2xl sm:text-3xl font-serif-display font-bold text-[var(--text-primary)]">
+            <p className="text-xl sm:text-2xl lg:text-3xl font-serif-display font-bold text-[var(--text-primary)]">
               {formatAmount(totalSaved)}
             </p>
             <p className="text-[11px] text-[var(--text-muted)] mt-1">
@@ -223,7 +223,7 @@ export default function SavingsPage() {
           </div>
 
           <div className="mt-4">
-            <p className="text-2xl sm:text-3xl font-serif-display font-bold text-amber-600 dark:text-amber-400">
+            <p className="text-xl sm:text-2xl lg:text-3xl font-serif-display font-bold text-amber-600 dark:text-amber-400">
               {formatAmount(totalFromSavings)}
             </p>
             <p className="text-[11px] text-[var(--text-muted)] mt-1">
@@ -291,12 +291,12 @@ export default function SavingsPage() {
       <div className="overflow-y-auto max-h-[calc(100vh-380px)] pr-2 -mr-2 custom-scrollbar">
         <div className="space-y-3 pb-4">
           {filteredLogs.length === 0 ? (
-            <GlassCard variant="light" className="p-12 text-center space-y-4">
+            <GlassCard variant="light" className="p-8 sm:p-12 text-center space-y-4">
             <div className="w-14 h-14 mx-auto rounded-3xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center shadow-inner">
               <PiggyBank className="w-7 h-7" />
             </div>
             <div className="space-y-1">
-              <h3 className="font-semibold text-lg text-[var(--text-primary)]">
+              <h3 className="font-semibold text-base sm:text-lg text-[var(--text-primary)]">
                 No savings records found
               </h3>
               <p className="text-xs sm:text-sm text-[var(--text-muted)] max-w-md mx-auto">
@@ -358,7 +358,7 @@ export default function SavingsPage() {
 
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-semibold text-sm sm:text-base text-[var(--text-primary)] truncate">
+                      <h4 className="font-semibold text-sm sm:text-base text-[var(--text-primary)] truncate max-w-full">
                         {item.note || (isDeposit ? "Savings Allocation" : "Expense from Savings")}
                       </h4>
 
@@ -414,10 +414,10 @@ export default function SavingsPage() {
                                 }}
                               >
                                 <span
-                                  className="w-1.5 h-1.5 rounded-full"
+                                  className="w-1.5 h-1.5 rounded-full shrink-0"
                                   style={{ backgroundColor: tag.colorKey || "#10b981" }}
                                 />
-                                {tag.name}
+                                <span className="truncate max-w-[100px]">{tag.name}</span>
                               </span>
                             );
                           })}
@@ -430,7 +430,7 @@ export default function SavingsPage() {
                 {/* Right amount and actions */}
                 <div className="flex items-center justify-between sm:justify-end gap-4 shrink-0 pl-13 sm:pl-0">
                   <span
-                    className={`font-serif-display text-lg sm:text-xl font-bold tracking-tight ${
+                    className={`font-serif-display text-base sm:text-lg lg:text-xl font-bold tracking-tight ${
                       isDeposit
                         ? "text-teal-600 dark:text-teal-400"
                         : "text-amber-600 dark:text-amber-400"

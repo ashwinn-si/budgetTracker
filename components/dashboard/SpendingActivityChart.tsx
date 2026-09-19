@@ -163,7 +163,7 @@ export function SpendingActivityChart({
             </div>
 
             {/* Table rows */}
-            <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04]">
+            <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04] max-h-[176px] overflow-y-auto custom-scrollbar">
               {nonZeroDays.map((day, i) => {
                 const pct = maxAmount > 0 ? (day.amount / maxAmount) * 100 : 0;
                 return (

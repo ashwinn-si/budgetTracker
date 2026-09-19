@@ -137,7 +137,7 @@ export default function TagsPage() {
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             Organize &amp; Classify
           </span>
-          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
             Tags &amp; <em>Categories</em>
           </h1>
         </div>
@@ -168,7 +168,7 @@ export default function TagsPage() {
             <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">
               Total Categories
             </p>
-            <p className="text-2xl font-bold font-heading text-[var(--text-primary)] mt-0.5">
+            <p className="text-xl sm:text-2xl font-bold font-heading text-[var(--text-primary)] mt-0.5">
               {totalTags}
             </p>
           </div>
@@ -183,7 +183,7 @@ export default function TagsPage() {
             <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">
               Most Active
             </p>
-            <p className="text-lg font-bold font-heading text-[var(--text-primary)] mt-0.5 truncate">
+            <p className="text-base sm:text-lg font-bold font-heading text-[var(--text-primary)] mt-0.5 truncate">
               {topTag ? (topTag as LocalTag).name : "None yet"}
             </p>
           </div>
@@ -198,7 +198,7 @@ export default function TagsPage() {
             <p className="text-xs text-[var(--text-muted)] font-medium uppercase tracking-wider">
               Tagged Expenses
             </p>
-            <p className="text-2xl font-bold font-heading text-[var(--text-primary)] mt-0.5">
+            <p className="text-xl sm:text-2xl font-bold font-heading text-[var(--text-primary)] mt-0.5">
               {allExpenses.length}
             </p>
           </div>
@@ -309,7 +309,7 @@ export default function TagsPage() {
 
       {/* Grid of Categories */}
       {allTags.length === 0 ? (
-        <div className="p-12 text-center rounded-3xl glass-card bg-white/80 dark:bg-white/[0.04] border border-white/80 dark:border-white/10 shadow-xs space-y-3">
+        <div className="p-8 sm:p-12 text-center rounded-3xl glass-card bg-white/80 dark:bg-white/[0.04] border border-white/80 dark:border-white/10 shadow-xs space-y-3">
           <FolderOpen className="w-12 h-12 text-[var(--text-muted)] mx-auto opacity-50" />
           <h3 className="text-base font-semibold font-heading text-[var(--text-primary)]">
             No categories defined yet

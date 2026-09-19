@@ -360,7 +360,7 @@ export function ExpenseFormModal({
             <span>Amount</span>
           </label>
           <div className="flex items-center">
-            <span className="text-3xl sm:text-4xl font-serif-display font-bold text-emerald-600 dark:text-emerald-400 mr-2 select-none">
+            <span className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-emerald-600 dark:text-emerald-400 mr-2 select-none">
               {currencyInfo.symbol}
             </span>
             <input
@@ -373,7 +373,7 @@ export function ExpenseFormModal({
               onKeyDown={handleAmountKeyDown}
               required
               autoFocus
-              className="w-full text-3xl sm:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
+              className="w-full text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
             />
           </div>
         </div>

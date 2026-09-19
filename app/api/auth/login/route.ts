@@ -79,6 +79,8 @@ export async function POST(req: NextRequest) {
         sheetsLinked: user.sheetsLinked,
         sheetsSpreadsheetId: user.sheetsSpreadsheetId || null,
         sheetsLastSyncedAt: user.sheetsLastSyncedAt,
+        isSharingEnabled: user.isSharingEnabled || false,
+        shareId: user.shareId || null,
       },
       accessToken,
     });

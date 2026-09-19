@@ -14,8 +14,10 @@ import {
   ExternalLink,
   Coins,
   Download,
-  FileDown,
   Trash2,
+  Share2,
+  Copy,
+  FileDown
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -175,6 +177,38 @@ export default function ProfilePage() {
     }
   };
 
+  // Public Sharing
+  const [isSharingLoading, setIsSharingLoading] = useState(false);
+  
+  const handleToggleSharing = async () => {
+    setIsSharingLoading(true);
+    try {
+      const res = await fetch("/api/user/share", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isSharingEnabled: !user?.isSharingEnabled }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        updateUser({ isSharingEnabled: data.isSharingEnabled, shareId: data.shareId });
+      } else {
+        alert("Failed to update sharing preferences.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Network error.");
+    } finally {
+      setIsSharingLoading(false);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (user?.shareId) {
+      navigator.clipboard.writeText(`${window.location.origin}/share/${user.shareId}`);
+      alert("Link copied to clipboard!");
+    }
+  };
+
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Header */}
@@ -182,7 +216,7 @@ export default function ProfilePage() {
         <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
           Preferences &amp; Sync Status
         </span>
-        <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
           Account <em>Profile</em>
         </h1>
       </div>
@@ -191,14 +225,14 @@ export default function ProfilePage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
         {/* ── Left: User & Preferences ── */}
-        <GlassCard variant="strong" className="p-6 sm:p-7 space-y-6 h-full">
+        <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7 space-y-6 h-full">
           {/* Avatar + name */}
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-serif-display text-2xl font-bold flex items-center justify-center border border-emerald-500/30 shadow-md shrink-0">
+            <div className="w-16 h-16 rounded-3xl bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-serif-display text-xl sm:text-2xl font-bold flex items-center justify-center border border-emerald-500/30 shadow-md shrink-0">
               {user?.name ? user.name[0].toUpperCase() : "A"}
             </div>
             <div className="min-w-0">
-              <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)] truncate">
+              <h2 className="text-lg sm:text-xl font-serif-display font-medium text-[var(--text-primary)] truncate">
                 {user?.name || "Alex Morgan"}
               </h2>
               <p className="text-xs sm:text-sm text-[var(--text-muted)] truncate">
@@ -363,7 +397,7 @@ export default function ProfilePage() {
         {/* ── Right: Sync & Integrations ── */}
         <div className="space-y-6">
           {/* Export Data Card */}
-          <GlassCard variant="mid" className="p-6 space-y-4">
+          <GlassCard variant="mid" className="p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center">
@@ -395,7 +429,7 @@ export default function ProfilePage() {
             </div>
           </GlassCard>
           {/* Offline Sync Status */}
-          <GlassCard variant="mid" className="p-6 space-y-4">
+          <GlassCard variant="mid" className="p-4 sm:p-6 space-y-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -443,7 +477,7 @@ export default function ProfilePage() {
           </GlassCard>
 
           {/* Google Sheets Sync Card */}
-          <GlassCard variant="mid" className="p-6 space-y-4">
+          <GlassCard variant="mid" className="p-4 sm:p-6 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -562,8 +596,58 @@ export default function ProfilePage() {
             </div>
           </GlassCard>
 
+          {/* Public Dashboard Sharing */}
+          <GlassCard variant="mid" className="p-4 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <Share2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm sm:text-base text-[var(--text-primary)]">
+                    Public Dashboard
+                  </h3>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    Share a read-only view of your finances
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant={user?.isSharingEnabled ? "outline" : "primary"}
+                size="sm"
+                onClick={handleToggleSharing}
+                isLoading={isSharingLoading}
+                className={user?.isSharingEnabled ? "text-rose-600 border-rose-500/30 hover:bg-rose-500/10" : "bg-indigo-600 hover:bg-indigo-700 text-white"}
+              >
+                {user?.isSharingEnabled ? "Disable" : "Enable"}
+              </Button>
+            </div>
+
+            {user?.isSharingEnabled && user.shareId && (
+              <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-3">
+                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                  Anyone with this link can view your current month's total spending, savings, and category breakdown. They cannot edit your data.
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex-1 p-2.5 rounded-xl bg-white/60 dark:bg-black/40 border border-black/10 dark:border-white/10 text-xs font-mono text-[var(--text-primary)] truncate select-all">
+                    {typeof window !== "undefined" ? `${window.location.origin}/share/${user.shareId}` : `/share/${user.shareId}`}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCopyLink}
+                    icon={<Copy className="w-4 h-4" />}
+                    className="shrink-0"
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            )}
+          </GlassCard>
+
           {/* Database & Data Management */}
-          <GlassCard className="p-5 sm:p-6 space-y-4 border-rose-500/20 dark:border-rose-500/20">
+          <GlassCard className="p-4 sm:p-6 space-y-4 border-rose-500/20 dark:border-rose-500/20">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-500">

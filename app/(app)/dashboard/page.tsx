@@ -291,7 +291,7 @@ function DashboardContent() {
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             Overview &amp; Spend Analytics
           </span>
-          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
             Financial <em>Pacing</em>
           </h1>
         </div>
@@ -367,7 +367,7 @@ function DashboardContent() {
           </div>
           <div className="flex items-center gap-3">
             <span
-              className={`text-2xl font-serif-display font-semibold ${
+              className={`text-xl sm:text-2xl font-serif-display font-semibold ${
                 savingsBalance.balance >= 0
                   ? "text-teal-700 dark:text-teal-300"
                   : "text-rose-600 dark:text-rose-400"
@@ -414,13 +414,13 @@ function DashboardContent() {
         {/* Summary Stats Card */}
         <GlassCard
           variant="strong"
-          className="lg:col-span-5 p-6 sm:p-7 flex flex-col gap-5"
+          className="lg:col-span-5 p-4 sm:p-6 lg:p-7 flex flex-col gap-5"
         >
           <div>
             <span className="text-xs font-semibold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
               Period Summary
             </span>
-            <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)] mt-0.5">
+            <h2 className="text-lg sm:text-xl font-serif-display font-medium text-[var(--text-primary)] mt-0.5">
               Spend at a Glance
             </h2>
           </div>
@@ -438,7 +438,7 @@ function DashboardContent() {
                 </div>
               </div>
               <span
-                className="text-lg sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block"
+                className="text-base sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block"
                 title={currentExpenses.length > 0 ? formatAmount(totalSpend) : "—"}
               >
                 {currentExpenses.length > 0 ? formatAmount(totalSpend) : "—"}
@@ -456,7 +456,7 @@ function DashboardContent() {
                   <Receipt className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
                 </div>
               </div>
-              <span className="text-lg sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block">
+              <span className="text-base sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block">
                 {currentExpenses.length > 0 ? currentExpenses.length : "—"}
               </span>
               <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">
@@ -496,7 +496,7 @@ function DashboardContent() {
                 </div>
               </div>
               <span
-                className="text-lg sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block"
+                className="text-base sm:text-xl lg:text-2xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-tight truncate block"
                 title={currentExpenses.length > 0 ? formatAmount(avgPerDay) : "—"}
               >
                 {currentExpenses.length > 0 ? formatAmount(avgPerDay) : "—"}
@@ -507,10 +507,10 @@ function DashboardContent() {
         </GlassCard>
 
         {/* Spending Activity Chart Card */}
-        <GlassCard variant="mid" className="lg:col-span-7 flex flex-col justify-between p-6">
+        <GlassCard variant="mid" className="lg:col-span-7 flex flex-col justify-between p-4 sm:p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="text-lg font-serif-display font-medium text-[var(--text-primary)]">
+              <h2 className="text-base sm:text-lg font-serif-display font-medium text-[var(--text-primary)]">
                 Spending Activity
               </h2>
               <p className="text-xs text-[var(--text-muted)]">
@@ -534,10 +534,10 @@ function DashboardContent() {
       </div>
 
       {/* Category Breakdown Section */}
-      <GlassCard variant="mid" className="p-6">
+      <GlassCard variant="mid" className="p-4 sm:p-6">
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)]">
+            <h2 className="text-lg sm:text-xl font-serif-display font-medium text-[var(--text-primary)]">
               Spend by Category
             </h2>
             <p className="text-xs text-[var(--text-muted)]">

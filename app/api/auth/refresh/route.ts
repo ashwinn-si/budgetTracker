@@ -108,6 +108,8 @@ export async function POST(req: NextRequest) {
         sheetsLinked: Boolean(userDoc.sheetsLinked || userDoc.googleAccessToken),
         sheetsSpreadsheetId: userDoc.sheetsSpreadsheetId || null,
         sheetsLastSyncedAt: userDoc.sheetsLastSyncedAt,
+        isSharingEnabled: userDoc.isSharingEnabled || false,
+        shareId: userDoc.shareId || null,
       },
     });
 

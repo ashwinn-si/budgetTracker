@@ -24,6 +24,7 @@ import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { queueExpenseDeletion, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
+import { SelectSheet } from "@/components/ui/SelectSheet";
 
 export default function ExpensesPage() {
   const { formatAmount, currencyInfo } = useCurrency();
@@ -156,7 +157,7 @@ export default function ExpensesPage() {
           <span className="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             Transaction Ledger
           </span>
-          <h1 className="text-3xl sm:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
             Expense <em>History</em>
           </h1>
         </div>
@@ -187,50 +188,42 @@ export default function ExpensesPage() {
           </div>
 
           {/* Tag filter */}
-          <div className="sm:col-span-3 relative group">
-            <Filter className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-emerald-500 transition-colors" />
-            <select
+          <div className="sm:col-span-3">
+            <SelectSheet
               value={selectedTag}
-              onChange={(e) => setSelectedTag(e.target.value)}
-              className="w-full appearance-none pl-10 pr-9 py-2.5 text-xs sm:text-sm font-medium bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 text-[var(--text-primary)] cursor-pointer hover:bg-white/80 dark:hover:bg-black/60 transition-all shadow-xs"
-            >
-              <option value="all">All Tags</option>
-              {allTags.map((tag) => (
-                <option key={tag._id} value={tag._id}>
-                  {tag.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-[var(--text-muted)] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-[var(--text-primary)] transition-colors" />
+              onChange={setSelectedTag}
+              options={[
+                { value: "all", label: "All Tags" },
+                ...allTags.map(tag => ({ value: tag._id, label: tag.name }))
+              ]}
+              icon={<Filter className="w-4 h-4" />}
+              title="Filter by Tag"
+            />
           </div>
 
           {/* Month selector */}
-          <div className="sm:col-span-3 relative group">
-            <Calendar className="w-4 h-4 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-focus-within:text-emerald-500 transition-colors" />
-            <select
+          <div className="sm:col-span-3">
+            <SelectSheet
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-full appearance-none pl-10 pr-9 py-2.5 text-xs sm:text-sm font-medium bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 text-[var(--text-primary)] cursor-pointer hover:bg-white/80 dark:hover:bg-black/60 transition-all shadow-xs"
-            >
-              <option value="all">All Months</option>
-              {availableMonths.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="w-4 h-4 text-[var(--text-muted)] absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none group-hover:text-[var(--text-primary)] transition-colors" />
+              onChange={setSelectedMonth}
+              options={[
+                { value: "all", label: "All Months" },
+                ...availableMonths.map(m => ({ value: m.value, label: m.label }))
+              ]}
+              icon={<Calendar className="w-4 h-4" />}
+              title="Filter by Month"
+            />
           </div>
         </div>
       </GlassCard>
 
       {/* Expenses List */}
       {filteredAndSortedExpenses.length === 0 ? (
-        <GlassCard variant="mid" className="p-12 text-center space-y-3">
+        <GlassCard variant="mid" className="p-8 sm:p-12 text-center space-y-3">
           <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center">
             <ReceiptText className="w-6 h-6" />
           </div>
-          <h3 className="text-lg font-serif-display font-medium text-[var(--text-primary)]">
+          <h3 className="text-base sm:text-lg font-serif-display font-medium text-[var(--text-primary)]">
             No expenses found
           </h3>
           <p className="text-xs text-[var(--text-muted)] max-w-sm mx-auto">
@@ -277,7 +270,7 @@ export default function ExpensesPage() {
                 </div>
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h4 className="font-semibold text-sm sm:text-base text-[var(--text-primary)] truncate">
+                      <h4 className="font-semibold text-sm sm:text-base text-[var(--text-primary)] truncate max-w-full">
                         {expense.note || "No description"}
                       </h4>
                       {isFromSavings && (
@@ -314,14 +307,14 @@ export default function ExpensesPage() {
                             return (
                               <span
                                 key={tId}
-                                className="px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                                className="px-2 py-0.5 rounded-full text-[10px] font-medium border flex items-center gap-1 max-w-[120px]"
                                 style={{
                                   backgroundColor: `${tag.colorKey}15`,
                                   borderColor: `${tag.colorKey}30`,
                                   color: tag.colorKey,
                                 }}
                               >
-                                {tag.name}
+                                <span className="truncate max-w-[100px]">{tag.name}</span>
                               </span>
                             );
                           })}

@@ -12,6 +12,8 @@ export interface AuthUser {
   sheetsLinked?: boolean;
   sheetsSpreadsheetId?: string | null;
   sheetsLastSyncedAt?: string | null;
+  isSharingEnabled?: boolean;
+  shareId?: string | null;
 }
 
 interface AuthContextType {

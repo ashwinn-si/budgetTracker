@@ -154,6 +154,7 @@ export function SavingsDepositModal({
       onClose={onClose}
       title={initialDeposit ? "Edit Savings Deposit" : "Add to Savings"}
       subtitle="Allocate money into your savings vault."
+      maxWidth="md"
       footer={
         <>
           <Button
@@ -185,7 +186,7 @@ export function SavingsDepositModal({
             <span>Deposit Amount</span>
           </label>
           <div className="flex items-center">
-            <span className="text-3xl sm:text-4xl font-serif-display font-bold text-teal-600 dark:text-teal-400 mr-2 select-none">
+            <span className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-teal-600 dark:text-teal-400 mr-2 select-none">
               {currencyInfo.symbol}
             </span>
             <input
@@ -198,7 +199,7 @@ export function SavingsDepositModal({
               onKeyDown={handleAmountKeyDown}
               required
               autoFocus
-              className="w-full text-3xl sm:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
+              className="w-full text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
             />
           </div>
         </div>

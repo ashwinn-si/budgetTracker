@@ -11,6 +11,8 @@ export interface IUser extends Document {
   sheetsSpreadsheetId?: string | null;
   sheetsLastSyncedAt?: Date | null;
   currency?: string;
+  isSharingEnabled?: boolean;
+  shareId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -27,6 +29,8 @@ const UserSchema = new Schema<IUser>(
     sheetsSpreadsheetId: { type: String, default: null },
     sheetsLastSyncedAt: { type: Date, default: null },
     currency: { type: String, default: "INR" },
+    isSharingEnabled: { type: Boolean, default: false },
+    shareId: { type: String, unique: true, sparse: true },
   },
   { timestamps: true }
 );
