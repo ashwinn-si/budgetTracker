@@ -18,7 +18,7 @@ import {
   Share2,
   Copy,
   FileDown,
-  Github
+  Code
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -702,7 +702,7 @@ export default function ProfilePage() {
             rel="noreferrer" 
             className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors group"
           >
-            <Github className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <Code className="w-4 h-4 group-hover:scale-110 transition-transform" />
             ashwinn-si
           </a>
         </div>

@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, ShieldCheck, Zap, CloudOff, FileSpreadsheet, Lock, LayoutDashboard, Github } from "lucide-react";
+import { ArrowRight, ShieldCheck, Zap, CloudOff, FileSpreadsheet, Lock, LayoutDashboard, Code } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
@@ -128,7 +128,7 @@ export default function HomePage() {
             rel="noreferrer" 
             className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-bold hover:text-emerald-700 dark:hover:text-emerald-300 transition-colors group"
           >
-            <Github className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <Code className="w-4 h-4 group-hover:scale-110 transition-transform" />
             ashwinn-si
           </a>
         </div>
