@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, use } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { PieChart, TrendingDown, TrendingUp, AlertCircle, Share2, Moon, Sun, ChevronLeft, ChevronRight } from "lucide-react";
@@ -110,13 +111,14 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
         
         {/* Top Navbar */}
         <div className="flex items-center justify-between mb-2">
-          <Link href="/" className="flex items-center gap-2 group">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-md shadow-emerald-500/20 group-hover:shadow-emerald-500/40 transition-all">
-              <div className="w-3.5 h-3.5 border-2 border-white rounded-full" />
-            </div>
-            <span className="font-serif-display font-bold text-lg tracking-tight text-[var(--text-primary)]">
-              BudgetFlow
-            </span>
+          <Link href="/" className="flex items-center group">
+            <Image 
+              src="/logo.png" 
+              alt="BudgetFlow Logo" 
+              width={40} 
+              height={40} 
+              className="rounded-xl shadow-md group-hover:shadow-lg transition-all"
+            />
           </Link>
           
           <button
