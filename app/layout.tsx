@@ -99,7 +99,34 @@ export default function RootLayout({
         className="min-h-full flex flex-col font-sans"
       >
         <Providers>{children}</Providers>
-        <Toaster position="bottom-center" />
+        <Toaster 
+          position="bottom-center" 
+          toastOptions={{
+            style: {
+              background: 'var(--glass-strong-bg)',
+              color: 'var(--text-primary)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              border: '1px solid var(--glass-border)',
+              boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+              borderRadius: '16px',
+              fontFamily: 'var(--font-sans), sans-serif',
+              fontWeight: 500,
+            },
+            success: {
+              iconTheme: {
+                primary: 'var(--accent)',
+                secondary: 'var(--glass-strong-bg)',
+              },
+            },
+            error: {
+              iconTheme: {
+                primary: '#EF4444',
+                secondary: 'var(--glass-strong-bg)',
+              },
+            },
+          }}
+        />
       </body>
     </html>
   );
