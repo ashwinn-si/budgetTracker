@@ -35,7 +35,7 @@ const handler = NextAuth({
               googleId: account?.providerAccountId,
               googleAccessToken: account?.access_token,
               googleRefreshToken: account?.refresh_token,
-              sheetsLinked: false,
+              sheetsLinked: Boolean(account?.access_token),
             });
 
             // Initialize default tags
@@ -52,6 +52,7 @@ const handler = NextAuth({
             // Update google access tokens if provided
             if (account?.access_token) {
               existingUser.googleAccessToken = account.access_token;
+              existingUser.sheetsLinked = true;
             }
             if (account?.refresh_token) {
               existingUser.googleRefreshToken = account.refresh_token;
@@ -63,6 +64,13 @@ const handler = NextAuth({
         }
       }
       return true;
+    },
+    async jwt({ token, user }) {
+      if (user) {
+        token.email = user.email;
+        token.name = user.name;
+      }
+      return token;
     },
     async session({ session, token }) {
       if (session.user && token.sub) {

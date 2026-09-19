@@ -28,11 +28,19 @@ export async function POST(req: NextRequest) {
 
     const response = NextResponse.json({ success: true });
     response.cookies.delete("refreshToken");
+    response.cookies.delete("next-auth.session-token");
+    response.cookies.delete("__Secure-next-auth.session-token");
+    response.cookies.delete("next-auth.callback-url");
+    response.cookies.delete("__Secure-next-auth.callback-url");
+    response.cookies.delete("next-auth.csrf-token");
+    response.cookies.delete("__Host-next-auth.csrf-token");
     return response;
   } catch (error: unknown) {
     console.error("Logout error:", error);
     const response = NextResponse.json({ success: true });
     response.cookies.delete("refreshToken");
+    response.cookies.delete("next-auth.session-token");
+    response.cookies.delete("__Secure-next-auth.session-token");
     return response;
   }
 }

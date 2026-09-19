@@ -2,12 +2,14 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
+import { decode } from "next-auth/jwt";
 import { connectToDatabase } from "./db";
 import { RefreshToken } from "@/models/RefreshToken";
 import { User, IUser } from "@/models/User";
 
 const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || "default_dev_access_secret_32_chars_long_12345";
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || "default_dev_refresh_secret_32_chars_long_67890";
+const NEXTAUTH_SECRET = process.env.NEXTAUTH_SECRET || "default_nextauth_secret_dev_32_chars_12345";
 
 export interface TokenPayload {
   userId: string;
@@ -39,6 +41,36 @@ export function verifyRefreshToken(token: string): TokenPayload | null {
   }
 }
 
+export function extractNextAuthToken(cookieStore: {
+  get: (name: string) => { value: string } | undefined;
+}): string | null {
+  // Check direct standard cookies
+  const direct =
+    cookieStore.get("__Secure-next-auth.session-token")?.value ||
+    cookieStore.get("next-auth.session-token")?.value;
+  if (direct) return direct;
+
+  // Check chunked cookies (.0, .1, etc.)
+  const isSecure = Boolean(cookieStore.get("__Secure-next-auth.session-token.0")?.value);
+  const prefix = isSecure
+    ? "__Secure-next-auth.session-token"
+    : cookieStore.get("next-auth.session-token.0")?.value
+    ? "next-auth.session-token"
+    : null;
+
+  if (prefix) {
+    let assembled = "";
+    let i = 0;
+    while (cookieStore.get(`${prefix}.${i}`)?.value) {
+      assembled += cookieStore.get(`${prefix}.${i}`)!.value;
+      i++;
+    }
+    return assembled || null;
+  }
+
+  return null;
+}
+
 export async function createAndStoreRefreshToken(
   user: { _id: string; email: string; name: string },
   deviceInfo = "web"
@@ -67,7 +99,7 @@ export async function createAndStoreRefreshToken(
 }
 
 export async function getCurrentUser(req?: NextRequest): Promise<TokenPayload | null> {
-  // Check authorization header first
+  // 1. Check authorization header first (Bearer token)
   if (req) {
     const authHeader = req.headers.get("authorization");
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -77,16 +109,37 @@ export async function getCurrentUser(req?: NextRequest): Promise<TokenPayload | 
     }
   }
 
-  // Check refresh cookie as fallback or for silent refresh
+  // 2. Check refresh cookie
   try {
-    const cookieStore = await cookies();
+    const cookieStore = req ? req.cookies : await cookies();
     const refreshCookie = cookieStore.get("refreshToken")?.value;
     if (refreshCookie) {
       const payload = verifyRefreshToken(refreshCookie);
       if (payload) return payload;
     }
+
+    // 3. Fallback: Check NextAuth session token (for Google OAuth users)
+    const nextAuthRaw = extractNextAuthToken(cookieStore);
+    if (nextAuthRaw) {
+      const decoded = await decode({
+        token: nextAuthRaw,
+        secret: NEXTAUTH_SECRET,
+      });
+
+      if (decoded?.email) {
+        await connectToDatabase();
+        const dbUser = await User.findOne({ email: (decoded.email as string).toLowerCase() });
+        if (dbUser) {
+          return {
+            userId: dbUser._id.toString(),
+            email: dbUser.email,
+            name: dbUser.name,
+          };
+        }
+      }
+    }
   } catch {
-    // cookies() unavailable in some execution contexts
+    // cookies() or DB lookup unavailable in current execution context
   }
 
   return null;

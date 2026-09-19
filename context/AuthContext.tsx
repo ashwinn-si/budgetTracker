@@ -36,13 +36,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const data = await res.json();
           setUser(data.user);
           setAccessToken(data.accessToken);
+          localStorage.setItem("budget_local_user", JSON.stringify(data.user));
         } else {
           setUser(null);
           setAccessToken(null);
+          localStorage.removeItem("budget_local_user");
         }
       } catch {
         setUser(null);
         setAccessToken(null);
+        localStorage.removeItem("budget_local_user");
       } finally {
         setIsLoading(false);
       }
@@ -100,6 +103,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setAccessToken(null);
     localStorage.removeItem("budget_local_user");
+    try {
+      const { signOut } = await import("next-auth/react");
+      await signOut({ redirect: false });
+    } catch {
+      // Ignore next-auth signOut errors
+    }
   }, []);
 
   const updateUser = useCallback((updates: Partial<AuthUser>) => {

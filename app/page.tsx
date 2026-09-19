@@ -3,11 +3,14 @@
 import React from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, ShieldCheck, Zap, CloudOff, FileSpreadsheet, Lock } from "lucide-react";
+import { ArrowRight, ShieldCheck, Zap, CloudOff, FileSpreadsheet, Lock, LayoutDashboard } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { useAuth } from "@/context/AuthContext";
 
 export default function HomePage() {
+  const { user, isLoading } = useAuth();
+
   return (
     <div className="min-h-screen flex flex-col justify-between py-8 sm:py-12 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto">
       {/* Top Brand Bar */}
@@ -22,16 +25,26 @@ export default function HomePage() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Link href="/login">
-            <Button variant="ghost" size="sm">
-              Sign In
-            </Button>
-          </Link>
-          <Link href="/register">
-            <Button variant="primary" size="sm">
-              Get Started
-            </Button>
-          </Link>
+          {user ? (
+            <Link href="/dashboard">
+              <Button variant="primary" size="sm" icon={<LayoutDashboard className="w-4 h-4" />}>
+                Go to Dashboard
+              </Button>
+            </Link>
+          ) : (
+            <>
+              <Link href="/login">
+                <Button variant="ghost" size="sm">
+                  Sign In
+                </Button>
+              </Link>
+              <Link href="/register">
+                <Button variant="primary" size="sm">
+                  Get Started
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -51,16 +64,18 @@ export default function HomePage() {
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-          <Link href="/login" className="w-full sm:w-auto">
+          <Link href={user ? "/dashboard" : "/login"} className="w-full sm:w-auto">
             <Button variant="primary" size="lg" fullWidth icon={<ArrowRight className="w-4 h-4" />}>
-              Open BudgetFlow
+              {user ? "Open Dashboard" : "Open BudgetFlow"}
             </Button>
           </Link>
-          <Link href="/register" className="w-full sm:w-auto">
-            <Button variant="ghost" size="lg" fullWidth>
-              Create Free Account
-            </Button>
-          </Link>
+          {!user && (
+            <Link href="/register" className="w-full sm:w-auto">
+              <Button variant="ghost" size="lg" fullWidth>
+                Create Free Account
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* 3 Core Highlights */}
