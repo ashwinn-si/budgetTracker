@@ -91,12 +91,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "No active session or valid refresh token" }, { status: 401 });
     }
 
-    // 4. Issue new JWT accessToken and store persistent refreshToken
+    // Rotate: issue new tokens and store them with the device's User-Agent
+    const deviceInfo = req.headers.get("user-agent") || "web";
     const { accessToken, refreshToken: newRefreshToken } = await createAndStoreRefreshToken({
       _id: userDoc._id.toString(),
       email: userDoc.email,
       name: userDoc.name,
-    });
+    }, deviceInfo);
 
     const response = NextResponse.json({
       accessToken,

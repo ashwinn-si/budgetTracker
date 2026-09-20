@@ -1,22 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
+import { Saving } from "@/models/Saving";
 import { getCurrentUser } from "@/lib/auth";
 
+/**
+ * POST /api/expenses/clear
+ *
+ * Deletes ALL expenses AND savings for the authenticated user from MongoDB.
+ * The client is responsible for also clearing IndexedDB (Dexie) and the
+ * sync queue after this returns 200.
+ *
+ * Auth: Bearer token (Authorization header) OR refreshToken cookie.
+ */
 export async function POST(req: NextRequest) {
   try {
+    // Support both Bearer token (for cross-browser reliability) and cookie auth
     const user = await getCurrentUser(req);
-    const userId = user?.userId || "local_user";
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Unauthorized. Please log in." },
+        { status: 401 }
+      );
+    }
+
+    const userId = user.userId;
 
     const db = await connectToDatabase();
     if (!db) {
-      return NextResponse.json({ success: true, count: 0 });
+      return NextResponse.json(
+        { error: "Database unavailable. Try again shortly." },
+        { status: 503 }
+      );
     }
 
-    const result = await Expense.deleteMany({ userId });
-    return NextResponse.json({ success: true, deletedCount: result.deletedCount });
+    // Delete both expenses AND savings so a full reset is truly complete
+    const [expResult, savResult] = await Promise.all([
+      Expense.deleteMany({ userId }),
+      Saving.deleteMany({ userId }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      deletedExpenses: expResult.deletedCount,
+      deletedSavings: savResult.deletedCount,
+    });
   } catch (error: unknown) {
     console.error("POST /api/expenses/clear error:", error);
-    return NextResponse.json({ error: "Failed to clear expenses" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to clear data" },
+      { status: 500 }
+    );
   }
 }

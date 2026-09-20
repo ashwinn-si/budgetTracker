@@ -28,14 +28,13 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
-import { useSync } from "@/lib/offline/useSync";
 import { clearAllLocalExpenses } from "@/lib/offline/syncQueue";
 
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, isDecimal, setIsDecimal, formatAmount } = useCurrency();
-  const { status, pendingCount, lastSyncedAt, syncNow, isSyncing } = useSync();
+  const { status, pendingCount, lastSyncedAt, syncNow, isSyncing } = useAuth().syncStatus;
 
   // Sheets sync state
   const [isSheetsSyncing, setIsSheetsSyncing] = useState(false);
@@ -147,13 +146,27 @@ export default function ProfilePage() {
 
     setIsClearingDb(true);
     try {
-      const res = await fetch("/api/expenses/clear", { method: "POST" });
+      // Pass the Bearer token so this works in all browsers regardless of
+      // cookie availability (Safari ITP, Arc, etc.)
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      const storedToken =
+        typeof window !== "undefined"
+          ? sessionStorage.getItem("budget_access_token")
+          : null;
+      if (storedToken) headers["Authorization"] = `Bearer ${storedToken}`;
+
+      const res = await fetch("/api/expenses/clear", { method: "POST", headers });
       if (res.ok) {
+        // Clear both Dexie (expenses, savings) AND the sync queue so stale
+        // pending items don't re-sync deleted data after the reset.
         await clearAllLocalExpenses();
+        // Also clear the last-synced timestamp so the sync indicator resets
+        localStorage.removeItem("budget_last_synced");
         toast.success("Database cleared! All expenses and savings have been reset.");
         window.location.reload();
       } else {
-        toast.error("Failed to clear database.");
+        const data = await res.json().catch(() => ({}));
+        toast.error(data.error || "Failed to clear database.");
       }
     } catch (err) {
       console.error("Failed to clear database:", err);

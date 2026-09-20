@@ -44,7 +44,10 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
   } catch (e) {
     cached!.promise = null;
     console.error("MongoDB connection error:", e);
-    throw e;
+    // Return null instead of throwing so callers' `if (!db)` guard fires
+    // correctly — throwing here caused routes to return 500 instead of
+    // handling the offline/DB-unavailable case gracefully.
+    return null;
   }
 
   return cached!.conn;

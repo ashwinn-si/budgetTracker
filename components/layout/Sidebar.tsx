@@ -21,14 +21,13 @@ import {
   X,
 } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
-import { useSync } from "@/lib/offline/useSync";
 import { useAuth } from "@/context/AuthContext";
 import { useSidebar } from "@/context/SidebarContext";
 
 export function Sidebar() {
   const pathname = usePathname();
   const { theme, toggleTheme } = useTheme();
-  const { status, pendingCount } = useSync();
+  const { status, pendingCount } = useAuth().syncStatus;
   const { user, logout } = useAuth();
   const { isCollapsed, toggleCollapse, isMobileOpen, closeMobile } = useSidebar();
 

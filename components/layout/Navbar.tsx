@@ -5,12 +5,12 @@ import Link from "next/link";
 import Image from "next/image";
 import { Sun, Moon, CloudCheck, CloudUpload, WifiOff, Menu } from "lucide-react";
 import { useTheme } from "@/context/ThemeContext";
-import { useSync } from "@/lib/offline/useSync";
+import { useAuth } from "@/context/AuthContext";
 import { useSidebar } from "@/context/SidebarContext";
 
 export function Navbar() {
   const { theme, toggleTheme } = useTheme();
-  const { status, pendingCount } = useSync();
+  const { status, pendingCount } = useAuth().syncStatus;
   const { openMobile } = useSidebar();
 
   return (

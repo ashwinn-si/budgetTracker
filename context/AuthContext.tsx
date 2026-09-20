@@ -3,6 +3,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { clearLocalUserData, db } from "@/lib/offline/db";
 import { pullFromServer } from "@/lib/offline/syncQueue";
+import { useSync } from "@/lib/offline/useSync";
 
 export interface AuthUser {
   id: string;
@@ -24,17 +25,61 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<AuthUser>) => void;
+  /** Sync state exposed so consumers (e.g. Profile page) can read status */
+  syncStatus: ReturnType<typeof useSync>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// ---------------------------------------------------------------------------
+// sessionStorage helpers — keeps the access token across same-tab page reloads
+// without exposing it to other tabs (unlike localStorage).
+// ---------------------------------------------------------------------------
+function persistAccessToken(token: string | null) {
+  if (typeof window === "undefined") return;
+  try {
+    if (token) {
+      sessionStorage.setItem("budget_access_token", token);
+    } else {
+      sessionStorage.removeItem("budget_access_token");
+    }
+  } catch {
+    // sessionStorage may be unavailable in private/restricted contexts
+  }
+}
+
+function readPersistedAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem("budget_access_token");
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Provider
+// ---------------------------------------------------------------------------
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  // Initialise from sessionStorage so sync has a token immediately on mount,
+  // even before the silent-refresh response comes back.
+  const [accessToken, setAccessToken] = useState<string | null>(readPersistedAccessToken);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  // Keep sessionStorage in sync whenever the in-memory token changes
+  useEffect(() => {
+    persistAccessToken(accessToken);
+  }, [accessToken]);
+
+  // Pass the live access token into useSync so every sync/pull request carries
+  // the Authorization header — this makes sync work in all browsers regardless
+  // of cookie support (Safari ITP, Arc incognito, etc.).
+  const syncStatus = useSync({ accessToken });
+
   // Helper to handle user session initialization and storage isolation
-  const handleUserSession = useCallback(async (newUser: AuthUser) => {
+  const handleUserSession = useCallback(async (newUser: AuthUser, token: string | null) => {
     const previousUserId = localStorage.getItem("budget_active_user_id");
     if (previousUserId && previousUserId !== newUser.id) {
       // Switched account: wipe previous user's cached offline data
@@ -43,8 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem("budget_active_user_id", newUser.id);
     localStorage.setItem("budget_local_user", JSON.stringify(newUser));
 
-    // Pull real user transactions from server
-    await pullFromServer();
+    // Pull real user transactions from server, passing the token so the
+    // fetch carries the Authorization header.
+    await pullFromServer(token);
   }, []);
 
   // Silent auto-login via access/refresh tokens on app load
@@ -56,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const data = await res.json();
           setUser(data.user);
           setAccessToken(data.accessToken);
-          await handleUserSession(data.user);
+          await handleUserSession(data.user, data.accessToken);
         } else {
           setUser(null);
           setAccessToken(null);
@@ -87,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(data.user);
       setAccessToken(data.accessToken);
-      await handleUserSession(data.user);
+      await handleUserSession(data.user, data.accessToken);
       return { success: true };
     } catch {
       return { success: false, error: "Network error during login" };
@@ -107,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       setUser(data.user);
       setAccessToken(data.accessToken);
-      await handleUserSession(data.user);
+      await handleUserSession(data.user, data.accessToken);
       return { success: true };
     } catch {
       return { success: false, error: "Network error during registration" };
@@ -124,10 +170,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
     setAccessToken(null);
 
-    // Clear local storage and IndexedDB to avoid leaking data to another user
+    // Clear local storage, sessionStorage and IndexedDB to avoid leaking data to another user
     localStorage.removeItem("budget_local_user");
     localStorage.removeItem("budget_active_user_id");
     localStorage.removeItem("budget_last_synced");
+    persistAccessToken(null);
     await clearLocalUserData();
 
     try {
@@ -157,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         updateUser,
+        syncStatus,
       }}
     >
       {children}

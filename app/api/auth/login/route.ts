@@ -64,11 +64,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Capture the User-Agent so each session row in RefreshToken is
+    // labelled by device (useful for future session management UI and debugging
+    // multi-session flows).
+    const deviceInfo = req.headers.get("user-agent") || "web";
+
     const { accessToken, refreshToken } = await createAndStoreRefreshToken({
       _id: user._id.toString(),
       email: user.email,
       name: user.name,
-    });
+    }, deviceInfo);
 
     const response = NextResponse.json({
       user: {

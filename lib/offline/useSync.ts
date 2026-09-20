@@ -7,7 +7,16 @@ import { flushSyncQueue, pullFromServer } from "./syncQueue";
 
 export type SyncState = "synced" | "syncing" | "pending" | "offline";
 
-export function useSync() {
+interface UseSyncOptions {
+  /**
+   * JWT access token from AuthContext. When provided it is forwarded to every
+   * sync/pull request as `Authorization: Bearer <token>`, making sync work in
+   * browsers that strip or restrict cookies (Safari ITP, Arc, etc.).
+   */
+  accessToken?: string | null;
+}
+
+export function useSync({ accessToken }: UseSyncOptions = {}) {
   const [isOnline, setIsOnline] = useState<boolean>(true);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
@@ -21,8 +30,12 @@ export function useSync() {
 
     setIsSyncing(true);
     try {
-      const result = await flushSyncQueue();
-      await pullFromServer();
+      // Pass the access token so requests carry the Authorization header.
+      // flushSyncQueue / pullFromServer also fall back to sessionStorage so
+      // this works even before the AuthContext token is available (e.g., on
+      // initial mount before the silent-refresh response comes back).
+      const result = await flushSyncQueue(accessToken);
+      await pullFromServer(accessToken);
       if (result.success) {
         const now = new Date();
         setLastSyncedAt(now);
@@ -31,7 +44,7 @@ export function useSync() {
     } finally {
       setIsSyncing(false);
     }
-  }, [isSyncing]);
+  }, [isSyncing, accessToken]);
 
   // Track online/offline status + boot sync
   useEffect(() => {
@@ -67,8 +80,8 @@ export function useSync() {
     };
   }, []);
 
-  // Auto-sync: whenever items appear in the queue, flush them after a
-  // short debounce so users never have to hit "Sync" manually
+  // Auto-sync: whenever items appear in the queue, flush them after a short
+  // debounce so users never have to hit "Sync" manually
   useEffect(() => {
     if (pendingCount === 0 || isSyncing || !isOnline) return;
     const timer = setTimeout(() => {

@@ -20,7 +20,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
-import { useSync } from "@/lib/offline/useSync";
+import { useAuth } from "@/context/AuthContext";
 import { useLoading } from "@/context/LoadingContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SpendingActivityChart } from "@/components/dashboard/SpendingActivityChart";
@@ -31,7 +31,7 @@ import { TagFilter } from "@/components/dashboard/TagFilter";
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { syncNow, isSyncing } = useSync();
+  const { syncNow, isSyncing } = useAuth().syncStatus;
   const { startLoading, stopLoading } = useLoading();
   const { formatAmount, currencyInfo } = useCurrency();
 

@@ -1,4 +1,42 @@
+"use client";
+
 import { db, LocalExpense, LocalTag, LocalSaving, SyncQueueItem } from "./db";
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Build fetch headers for authenticated API calls.
+ *
+ * Priority: Authorization header (Bearer token) > cookies (automatic).
+ * Sending the Bearer token explicitly makes sync work in browsers that strip
+ * or block cookies (Safari ITP, Arc incognito, cross-origin contexts).
+ */
+function buildAuthHeaders(accessToken?: string | null): HeadersInit {
+  const headers: HeadersInit = { "Content-Type": "application/json" };
+  if (accessToken) {
+    headers["Authorization"] = `Bearer ${accessToken}`;
+  }
+  return headers;
+}
+
+/**
+ * Retrieve the stored access token from sessionStorage (persisted there by
+ * AuthContext so it survives page reloads within the same tab).
+ */
+function getStoredAccessToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return sessionStorage.getItem("budget_access_token");
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Queue helpers
+// ---------------------------------------------------------------------------
 
 export async function queueExpenseCreation(expense: LocalExpense) {
   await db.expenses.put(expense);
@@ -80,6 +118,13 @@ export async function queueTagCreation(tag: LocalTag) {
 }
 
 export async function queueTagDeletion(tagId: string) {
+  // Read the tag BEFORE deleting it locally so we can include its name in the
+  // sync payload. The server's delete handler uses payload.name for a safe
+  // name-based lookup — payload.tagId alone is not enough because local IDs
+  // are not valid MongoDB ObjectIds and cannot be used as _id on the server.
+  const tag = await db.tags.get(tagId);
+  const tagName = tag?.name ?? "";
+
   await db.tags.delete(tagId);
   // Also remove tagId from local expenses that reference it
   const expenses = await db.expenses.toArray();
@@ -93,20 +138,38 @@ export async function queueTagDeletion(tagId: string) {
     clientId: tagId,
     action: "delete",
     entity: "tag",
-    payload: { tagId },
+    // Include name so the server can resolve the tag even when clientId is
+    // a local-style ID (not a MongoDB ObjectId).
+    payload: { tagId, name: tagName },
     createdAt: Date.now(),
   });
 }
 
+// ---------------------------------------------------------------------------
+// Flush
+// ---------------------------------------------------------------------------
+
 let isFlushing = false;
 
-export async function flushSyncQueue(): Promise<{ success: boolean; syncedCount: number; error?: string }> {
+/**
+ * Push all pending sync queue items to the server.
+ *
+ * @param accessToken - Optional JWT access token. When provided it is sent as
+ *   `Authorization: Bearer <token>` so sync works even when cookies are
+ *   unavailable (Safari ITP, Arc incognito, cross-origin setups).
+ */
+export async function flushSyncQueue(
+  accessToken?: string | null
+): Promise<{ success: boolean; syncedCount: number; failedCount?: number; failedItems?: unknown[]; error?: string }> {
   if (isFlushing) {
     return { success: true, syncedCount: 0 };
   }
   if (typeof window === "undefined" || !navigator.onLine) {
     return { success: false, syncedCount: 0, error: "Offline" };
   }
+
+  // Resolve access token: prefer explicit param, fall back to sessionStorage
+  const token = accessToken ?? getStoredAccessToken();
 
   isFlushing = true;
   try {
@@ -117,19 +180,45 @@ export async function flushSyncQueue(): Promise<{ success: boolean; syncedCount:
 
     const res = await fetch("/api/expenses/sync", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: buildAuthHeaders(token),
       body: JSON.stringify({ items: queueItems }),
     });
 
+    if (res.status === 503) {
+      // DB temporarily unavailable — keep items in queue, retry later
+      return { success: false, syncedCount: 0, error: "Server DB unavailable" };
+    }
+
+    if (res.status === 401) {
+      // Not authenticated — token may have expired; caller should refresh first
+      return { success: false, syncedCount: 0, error: "Unauthorized — token expired" };
+    }
+
     if (!res.ok) {
-      // Server returned error or DB not connected
       return { success: false, syncedCount: 0, error: `Server response: ${res.status}` };
     }
 
     const data = await res.json();
 
-    // Mark processed items in local Dexie as synced
+    // Build a set of clientIds that the server explicitly reported as failed.
+    // These items stay in the Dexie queue for a future retry rather than
+    // being silently dropped as if they had succeeded.
+    const failedClientIds = new Set<string>(
+      Array.isArray(data.failedItems)
+        ? data.failedItems.map((f: { clientId: string }) => f.clientId)
+        : []
+    );
+
+    // Mark successfully processed items as synced and remove them from the queue.
+    // Items in failedClientIds are intentionally left untouched.
+    let syncedCount = 0;
     for (const item of queueItems) {
+      if (failedClientIds.has(item.clientId)) {
+        // Server returned this item as failed — leave it in the queue
+        // so it will be retried on the next sync trigger.
+        continue;
+      }
+
       if (item.entity === "expense" && item.action !== "delete") {
         const exp = await db.expenses.get(item.clientId);
         if (exp) {
@@ -145,9 +234,15 @@ export async function flushSyncQueue(): Promise<{ success: boolean; syncedCount:
       if (item.id !== undefined) {
         await db.syncQueue.delete(item.id);
       }
+      syncedCount++;
     }
 
-    return { success: true, syncedCount: queueItems.length, ...data };
+    return {
+      success: true,
+      syncedCount,
+      failedCount: failedClientIds.size,
+      ...(data.failedItems ? { failedItems: data.failedItems } : {}),
+    };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Sync error";
     return { success: false, syncedCount: 0, error: message };
@@ -156,29 +251,44 @@ export async function flushSyncQueue(): Promise<{ success: boolean; syncedCount:
   }
 }
 
-export async function pullFromServer(): Promise<{ success: boolean; error?: string }> {
+// ---------------------------------------------------------------------------
+// Pull
+// ---------------------------------------------------------------------------
+
+/**
+ * Pull the latest data from the server and reconcile with local Dexie store.
+ *
+ * @param accessToken - Optional JWT access token (see flushSyncQueue docs).
+ */
+export async function pullFromServer(
+  accessToken?: string | null
+): Promise<{ success: boolean; error?: string }> {
   if (typeof window === "undefined" || !navigator.onLine) {
     return { success: false, error: "Offline" };
   }
 
+  // Resolve access token: prefer explicit param, fall back to sessionStorage
+  const token = accessToken ?? getStoredAccessToken();
+  const headers = buildAuthHeaders(token);
+
   try {
     // 1. Pull tags
-    const tagsRes = await fetch("/api/tags");
+    const tagsRes = await fetch("/api/tags", { headers });
     if (tagsRes.ok) {
       const tagsData = await tagsRes.json();
       if (Array.isArray(tagsData.tags) && tagsData.tags.length > 0) {
-        const localTags: LocalTag[] = tagsData.tags.map((t: any) => ({
-          _id: t._id?.toString(),
-          userId: t.userId || "local_user",
-          name: t.name,
-          colorKey: t.colorKey || "#22C55E",
+        const localTags: LocalTag[] = tagsData.tags.map((t: Record<string, unknown>) => ({
+          _id: (t._id as { toString(): string })?.toString() ?? String(t._id),
+          userId: (t.userId as string) || "local_user",
+          name: t.name as string,
+          colorKey: (t.colorKey as string) || "#22C55E",
         }));
         await db.tags.bulkPut(localTags);
       }
     }
 
     // 2. Pull expenses
-    const expRes = await fetch("/api/expenses");
+    const expRes = await fetch("/api/expenses", { headers });
     if (expRes.ok) {
       const expData = await expRes.json();
       if (Array.isArray(expData.expenses)) {
@@ -187,7 +297,8 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
         const serverClientIds = new Set<string>();
 
         for (const sExp of expData.expenses) {
-          const clientId = sExp.clientId || sExp._id?.toString();
+          const clientId =
+            sExp.clientId || (sExp._id as { toString(): string })?.toString();
           serverClientIds.add(clientId);
 
           if (!pendingClientIds.has(clientId)) {
@@ -197,7 +308,11 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
               amount: Number(sExp.amount) || 0,
               note: sExp.note || "",
               tagIds: Array.isArray(sExp.tagIds)
-                ? sExp.tagIds.map((t: any) => (typeof t === "object" ? t._id?.toString() : t.toString()))
+                ? sExp.tagIds.map((t: unknown) =>
+                    typeof t === "object" && t !== null
+                      ? (t as { _id: { toString(): string } })._id?.toString()
+                      : String(t)
+                  )
                 : [],
               date:
                 typeof sExp.date === "string"
@@ -215,10 +330,13 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
           }
         }
 
-        // Clean up any old local expenses that no longer exist on server and are not pending
+        // Clean up local expenses that no longer exist on server and are not pending
         const localExpenses = await db.expenses.toArray();
         for (const localExp of localExpenses) {
-          if (!pendingClientIds.has(localExp.clientId) && !serverClientIds.has(localExp.clientId)) {
+          if (
+            !pendingClientIds.has(localExp.clientId) &&
+            !serverClientIds.has(localExp.clientId)
+          ) {
             await db.expenses.delete(localExp.clientId);
           }
         }
@@ -226,7 +344,7 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
     }
 
     // 3. Pull savings
-    const savRes = await fetch("/api/savings");
+    const savRes = await fetch("/api/savings", { headers });
     if (savRes.ok) {
       const savData = await savRes.json();
       if (Array.isArray(savData.savings)) {
@@ -235,7 +353,8 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
         const serverSavIds = new Set<string>();
 
         for (const sSav of savData.savings) {
-          const clientId = sSav.clientId || sSav._id?.toString();
+          const clientId =
+            sSav.clientId || (sSav._id as { toString(): string })?.toString();
           serverSavIds.add(clientId);
 
           if (!pendingClientIds.has(clientId)) {
@@ -264,7 +383,10 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
 
         const localSavings = await db.savings.toArray();
         for (const localSav of localSavings) {
-          if (!pendingClientIds.has(localSav.clientId) && !serverSavIds.has(localSav.clientId)) {
+          if (
+            !pendingClientIds.has(localSav.clientId) &&
+            !serverSavIds.has(localSav.clientId)
+          ) {
             await db.savings.delete(localSav.clientId);
           }
         }
@@ -278,9 +400,12 @@ export async function pullFromServer(): Promise<{ success: boolean; error?: stri
   }
 }
 
+// ---------------------------------------------------------------------------
+// Clear
+// ---------------------------------------------------------------------------
+
 export async function clearAllLocalExpenses(): Promise<void> {
   await db.expenses.clear();
   await db.savings.clear();
   await db.syncQueue.where("entity").anyOf("expense", "saving").delete();
 }
-
