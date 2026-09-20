@@ -26,4 +26,5 @@ A personal budget tracking web app built with Next.js (App Router), MongoDB, and
 - All offline database interactions MUST use Dexie, not `localStorage`.
 - All writes land in IndexedDB first, with `syncStatus: "pending"`, and sync in the background.
 - Respect Next.js App Router conventions (server vs client components).
+- Google Sheets sync must always update the user's existing spreadsheet in-place (`sheetsSpreadsheetId`) to prevent duplicate sheets, unless a fresh sync (`action: "fresh"`) is explicitly requested. Token auto-refresh events must be persisted to the database.
 - Refer to `implementation.md` for detailed step-by-step feature implementations and data model definitions.

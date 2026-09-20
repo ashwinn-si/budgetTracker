@@ -57,7 +57,7 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 # Configured in Google Cloud Console → APIs & Services → Credentials.
 # Authorized redirect URI: {NEXTAUTH_URL}/api/auth/callback/google
-# Scopes to request: openid, email, profile, https://www.googleapis.com/auth/spreadsheets
+# Scopes to request: openid, email, profile, https://www.googleapis.com/auth/spreadsheets, https://www.googleapis.com/auth/drive.file
 
 # --- Custom access/refresh tokens (email+password auth) ---
 JWT_ACCESS_SECRET=              # openssl rand -base64 32
@@ -286,7 +286,11 @@ models/
 
 ### Phase 6 — Export (Excel + Google Sheets)
 1. `GET /api/export/excel`: query the user's (filtered) expenses, build a workbook with `exceljs`, stream it back as an attachment.
-2. `POST /api/export/sheets`: using the Google token captured in Phase 2, call the Sheets API (`googleapis`) to create or update a spreadsheet in the user's own Drive. On success, update `sheetsLinked`, `sheetsSpreadsheetId`, and `sheetsLastSyncedAt` on the `User` document.
+2. `POST /api/export/sheets`: using the Google token captured in Phase 2, call the Sheets API (`googleapis`) to create or update a spreadsheet in the user's own Drive:
+   - **In-place updates**: when `sheetsSpreadsheetId` is present and valid, update the exact same spreadsheet in Google Drive by clearing old data ranges and writing updated records and summaries, without creating duplicate files.
+   - **Delete & fresh resync**: accepts `action: "fresh"` to delete/trash the old file in Google Drive via Drive API and create a brand-new clean sheet.
+   - **Token auto-refresh**: listens to `oauth2Client.on("tokens")` and automatically persists refreshed tokens to MongoDB.
+   - On success, updates `sheetsLinked`, `sheetsSpreadsheetId`, and `sheetsLastSyncedAt` on the `User` document.
 3. Both routes read from the same "get filtered expenses" function the dashboard uses, so there's one source of truth for what counts as the current dataset.
 
 ### Phase 7 — Profile Page
@@ -294,7 +298,7 @@ This page now does more than account info:
 1. **User info + password reset** (or "set a password" for Google-only accounts, as in Phase 2).
 2. **Tag management** — full list of the user's tags with rename/delete/recolor actions, and a count of expenses using each tag (so deleting a heavily-used tag can warn before it happens).
 3. **Offline sync status** — reads the rolled-up status from Phase 5 ("All synced" / "N pending" / last-synced time).
-4. **Google Sheets sync status** — reads `sheetsLinked` / `sheetsLastSyncedAt` from the user document; shows "Not connected" with a connect action if `sheetsLinked` is false, or "Last synced {time}" with a manual "Sync now" button if true.
+4. **Google Sheets sync hub** — shows live connection status, "Sync Changes" (in-place update), "Delete & Resync" (modal confirmation to delete old sheet and create fresh), "Unlink", spreadsheet link display, "Copy Link" button, "Open Sheet" button, and "Copy Sheet ID" button.
 
 ### Phase 8 — Design System & Theming
 1. Set up the CSS custom properties from the Design System section as global tokens (`globals.css` or a Tailwind theme extension).

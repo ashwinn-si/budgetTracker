@@ -8,7 +8,7 @@ A personal budget tracking web app built with Next.js, MongoDB, and Vercel.
 - **Detailed Analytics**: Dashboard with spend analytics, filterable by date and tags.
 - **Authentication**: Google OAuth and Email/Password with silent auto-login.
 - **Public Dashboard Sharing**: Generate a secure, public link to share read-only monthly spending and savings balances with parents or dependents.
-- **Exports**: Export data to Excel or sync directly to your personal Google Sheets.
+- **Exports & Google Sheets Sync**: Export data to Excel or sync directly to your personal Google Sheets. Features in-place updates to the same sheet without creating duplicates, an option to delete the existing sheet and resync fresh from start, and one-click sheet link and sheet ID copying.
 - **Modern UI Patterns**: Mobile-optimized bottom sheets for filters, global toast notifications via `react-hot-toast`, and a sleek light-green glassmorphism aesthetic with full light/dark mode support.
 
 ## Tech Stack
