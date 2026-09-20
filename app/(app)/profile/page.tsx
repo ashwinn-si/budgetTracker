@@ -25,7 +25,8 @@ import {
   PiggyBank,
   Tag as TagIcon,
   History,
-  Sparkles
+  Sparkles,
+  Unlink
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -128,6 +129,39 @@ export default function ProfilePage() {
       setSheetsMessage("Could not contact server to sync with Google Sheets.");
     } finally {
       setIsSheetsSyncing(false);
+    }
+  };
+
+  const [isUnlinkingSheets, setIsUnlinkingSheets] = useState(false);
+  const [isUnlinkModalOpen, setIsUnlinkModalOpen] = useState(false);
+
+  const handleUnlinkGoogleSheets = async () => {
+    setIsUnlinkingSheets(true);
+    try {
+      const res = await fetch("/api/export/sheets", { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        setSheetsUrl(null);
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("budget_sheets_url");
+        }
+        if (updateUser) {
+          updateUser({
+            sheetsLinked: false,
+            sheetsSpreadsheetId: undefined,
+            sheetsLastSyncedAt: undefined,
+          });
+        }
+        toast.success("Google Sheet unlinked! You can now start fresh.");
+        setSheetsMessage(null);
+        setIsUnlinkModalOpen(false);
+      } else {
+        toast.error(data.error || "Failed to unlink spreadsheet.");
+      }
+    } catch {
+      toast.error("Network error while unlinking sheet.");
+    } finally {
+      setIsUnlinkingSheets(false);
     }
   };
 
@@ -246,6 +280,14 @@ export default function ProfilePage() {
 
   // ── Delete Logs & Recovery State ──
   const rawDeleteLogs = useLiveQuery(() => db.deleteLogs.toArray(), []) || [];
+  const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
+  const tagMap = useMemo(() => {
+    const map = new Map<string, (typeof allTags)[0]>();
+    allTags.forEach((t) => {
+      if (t._id) map.set(t._id, t);
+    });
+    return map;
+  }, [allTags]);
   const [deleteLogFilter, setDeleteLogFilter] = useState<"all" | "expense" | "saving" | "tag">("all");
   const [recoveringId, setRecoveringId] = useState<string | null>(null);
   const [logToDeletePermanently, setLogToDeletePermanently] = useState<LocalDeleteLog | null>(null);
@@ -663,7 +705,7 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 self-start sm:self-auto">
+              <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
                 {activeSheetsUrl && (
                   <a
                     href={activeSheetsUrl}
@@ -683,6 +725,17 @@ export default function ProfilePage() {
                 >
                   Sync Sheets
                 </Button>
+                {(activeSheetsUrl || user?.sheetsSpreadsheetId) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsUnlinkModalOpen(true)}
+                    className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-500/20"
+                    icon={<Unlink className="w-3.5 h-3.5" />}
+                  >
+                    Unlink
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -850,44 +903,43 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Full Width: Delete Logs & Data Recovery (Recycle Bin) ── */}
-      <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-sm border border-emerald-500/20">
-              <History className="w-5 h-5" />
+      <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7 space-y-5 sm:space-y-6">
+        {/* Header: Responsive inline layout on mobile & desktop */}
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <div className="flex items-start gap-3 min-w-0 flex-1">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-sm border border-emerald-500/20 mt-0.5">
+              <History className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-serif-display font-medium text-[var(--text-primary)]">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-xl font-serif-display font-medium text-[var(--text-primary)] leading-snug">
                   Delete Logs &amp; <em>Recovery</em>
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 whitespace-nowrap">
                   Recycle Bin
                 </span>
               </div>
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+              <p className="text-xs text-[var(--text-muted)] mt-1 leading-relaxed">
                 Accidentally deleted an item? Restore expenses, savings, and categories back to your account anytime.
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
-            {rawDeleteLogs.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsEmptyBinModalOpen(true)}
-                className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-500/20"
-                icon={<Trash2 className="w-3.5 h-3.5" />}
-              >
-                Empty Bin
-              </Button>
-            )}
-          </div>
+          {rawDeleteLogs.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEmptyBinModalOpen(true)}
+              className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-500/20 shrink-0 text-xs px-2.5 sm:px-3 h-8 sm:h-9"
+              icon={<Trash2 className="w-3.5 h-3.5" />}
+            >
+              Empty Bin
+            </Button>
+          )}
         </div>
 
-        {/* Filter Tabs */}
-        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-black/5 dark:border-white/5">
+        {/* Filter Tabs: Horizontal scrollable strip on mobile to prevent awkward line breaks */}
+        <div className="flex items-center gap-1.5 sm:gap-2 pt-1 border-t border-black/5 dark:border-white/5 overflow-x-auto no-scrollbar -mx-1 px-1 py-1">
           {[
             { id: "all", label: "All Items", count: logCounts.all },
             { id: "expense", label: "Expenses", count: logCounts.expense },
@@ -900,7 +952,7 @@ export default function ProfilePage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setDeleteLogFilter(tab.id as any)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer select-none ${
+                className={`shrink-0 whitespace-nowrap inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer select-none ${
                   active
                     ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/40 font-semibold shadow-xs"
                     : "bg-black/5 dark:bg-white/5 text-[var(--text-secondary)] hover:bg-black/10 dark:hover:bg-white/10 border border-transparent"
@@ -939,7 +991,7 @@ export default function ProfilePage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+          <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
             {sortedDeleteLogs.map((log) => {
               const isExpense = log.entityType === "expense";
               const isSaving = log.entityType === "saving";
@@ -948,15 +1000,66 @@ export default function ProfilePage() {
               const hasAmount = !isNaN(amountNum) && (isExpense || isSaving);
               const isRecovering = recoveringId === log.id;
 
+              // Resolve tag if available
+              const tagId =
+                (log.data?.tagId as string) ||
+                (Array.isArray(log.data?.tagIds) && log.data.tagIds.length > 0
+                  ? (log.data.tagIds[0] as string)
+                  : undefined);
+              const resolvedTag = tagId ? tagMap.get(tagId) : null;
+
+              // Clean display title to avoid raw repeated amounts
+              let displayTitle = log.title;
+              if (isExpense) {
+                const noteStr = typeof log.data?.note === "string" ? log.data.note.trim() : "";
+                if (noteStr && noteStr !== String(amountNum) && noteStr !== `Expense: ${amountNum}`) {
+                  displayTitle = noteStr;
+                } else if (log.title && !log.title.startsWith("Expense:") && log.title !== String(amountNum)) {
+                  displayTitle = log.title;
+                } else if (resolvedTag?.name) {
+                  displayTitle = resolvedTag.name;
+                } else {
+                  displayTitle = "Expense";
+                }
+              } else if (isSaving) {
+                const noteStr = typeof log.data?.note === "string" ? log.data.note.trim() : "";
+                if (noteStr && !noteStr.startsWith("Deposit:") && !noteStr.startsWith("Withdrawal:")) {
+                  displayTitle = noteStr;
+                } else {
+                  displayTitle = log.data?.type === "deposit" ? "Savings Deposit" : "Savings Withdrawal";
+                }
+              }
+
+              // Clean formatted date without redundant amount prefix
+              let formattedDate: string | null = null;
+              const rawDate = (log.data?.date as string) || null;
+              if (rawDate) {
+                try {
+                  formattedDate = new Date(rawDate).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  });
+                } catch {
+                  formattedDate = rawDate.split("T")[0];
+                }
+              } else if (log.details) {
+                const parts = log.details.split("•").map((s) => s.trim());
+                const dateCandidate = parts.find(
+                  (p) => /\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}/.test(p) || p === "Recent"
+                );
+                formattedDate = dateCandidate || null;
+              }
+
               return (
                 <div
                   key={log.id}
                   className="p-3.5 sm:p-4 rounded-2xl bg-white/50 dark:bg-black/30 border border-white/60 dark:border-white/10 hover:border-emerald-500/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
                 >
                   {/* Item Details */}
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0 flex-1">
                     <div
-                      className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border ${
+                      className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0 border mt-0.5 sm:mt-0 ${
                         isExpense
                           ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20"
                           : isSaving
@@ -964,80 +1067,118 @@ export default function ProfilePage() {
                           : "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20"
                       }`}
                     >
-                      {isExpense && <Receipt className="w-5 h-5" />}
-                      {isSaving && <PiggyBank className="w-5 h-5" />}
-                      {isTag && <TagIcon className="w-5 h-5" />}
+                      {isExpense && <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      {isSaving && <PiggyBank className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      {isTag && <TagIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
-                            isExpense
-                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
-                              : isSaving
-                              ? "bg-teal-500/15 text-teal-700 dark:text-teal-300"
-                              : "bg-purple-500/15 text-purple-700 dark:text-purple-300"
-                          }`}
-                        >
-                          {log.entityType}
-                        </span>
-                        <h4 className="text-xs sm:text-sm font-semibold text-[var(--text-primary)] truncate">
-                          {log.title}
-                        </h4>
+                      {/* Title row: badge + title + mobile amount */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                          <span
+                            className={`text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0 ${
+                              isExpense
+                                ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                                : isSaving
+                                ? "bg-teal-500/15 text-teal-700 dark:text-teal-300"
+                                : "bg-purple-500/15 text-purple-700 dark:text-purple-300"
+                            }`}
+                          >
+                            {log.entityType}
+                          </span>
+                          <h4 className="text-xs sm:text-sm font-semibold text-[var(--text-primary)] truncate max-w-[170px] sm:max-w-xs">
+                            {displayTitle}
+                          </h4>
+                        </div>
+
+                        {/* Amount on Mobile (prominently right-aligned on the top line) */}
                         {hasAmount && (
-                          <span className="text-xs sm:text-sm font-bold font-heading text-[var(--text-primary)]">
+                          <span className="text-xs sm:text-sm font-bold font-heading text-[var(--text-primary)] shrink-0 sm:hidden">
                             {formatAmount(amountNum)}
                           </span>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] mt-1 flex-wrap">
+                      {/* Subtitle / metadata */}
+                      <div className="flex items-center gap-1.5 sm:gap-2 text-[11px] text-[var(--text-muted)] mt-1 flex-wrap">
+                        {resolvedTag && (
+                          <span
+                            className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-md text-[10px] font-medium border"
+                            style={{
+                              backgroundColor: `${resolvedTag.colorKey}15`,
+                              borderColor: `${resolvedTag.colorKey}30`,
+                              color: resolvedTag.colorKey,
+                            }}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full inline-block"
+                              style={{ backgroundColor: resolvedTag.colorKey }}
+                            />
+                            <span className="truncate max-w-[90px] sm:max-w-[120px]">{resolvedTag.name}</span>
+                          </span>
+                        )}
+
                         {isSaving && Boolean(log.data?.type) && (
                           <span className="capitalize text-teal-600 dark:text-teal-400 font-medium">
                             {String(log.data?.type)}
                           </span>
                         )}
+
                         {isTag && typeof log.data?.colorKey === "string" && (
                           <span className="inline-flex items-center gap-1">
                             <span
-                              className="w-2.5 h-2.5 rounded-full inline-block"
+                              className="w-2 h-2 rounded-full inline-block"
                               style={{ backgroundColor: log.data.colorKey }}
                             />
                             <span>{log.data.colorKey}</span>
                           </span>
                         )}
-                        {log.details && (
-                          <span className="truncate max-w-[200px]">{log.details}</span>
-                        )}
-                        <span>•</span>
-                        <span className="text-[var(--text-secondary)]">
+
+                        {formattedDate && <span>{formattedDate}</span>}
+
+                        <span className="hidden sm:inline">•</span>
+                        <span className="hidden sm:inline text-[var(--text-secondary)]">
                           Deleted {formatTimeAgo(log.deletedAt)}
                         </span>
                       </div>
                     </div>
                   </div>
 
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                    <Button
-                      variant="accent-ghost"
-                      size="sm"
-                      onClick={() => handleRecover(log)}
-                      isLoading={isRecovering}
-                      icon={<RotateCcw className={`w-3.5 h-3.5 ${isRecovering ? "animate-spin" : ""}`} />}
-                      className="text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
-                    >
-                      Recover
-                    </Button>
-                    <button
-                      type="button"
-                      onClick={() => setLogToDeletePermanently(log)}
-                      title="Permanently Delete"
-                      className="p-2 rounded-xl text-[var(--text-muted)] hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  {/* Actions & Desktop Amount */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-black/5 dark:border-white/5">
+                    {/* Mobile: Relative deletion time */}
+                    <span className="text-[11px] text-[var(--text-muted)] sm:hidden">
+                      Deleted {formatTimeAgo(log.deletedAt)}
+                    </span>
+
+                    {/* Desktop: Amount */}
+                    {hasAmount && (
+                      <span className="hidden sm:inline-block text-sm sm:text-base font-bold font-heading text-[var(--text-primary)] mr-2">
+                        {formatAmount(amountNum)}
+                      </span>
+                    )}
+
+                    <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                      <Button
+                        variant="accent-ghost"
+                        size="sm"
+                        onClick={() => handleRecover(log)}
+                        isLoading={isRecovering}
+                        icon={<RotateCcw className={`w-3.5 h-3.5 ${isRecovering ? "animate-spin" : ""}`} />}
+                        className="text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15 text-xs h-7 sm:h-8 px-2.5 sm:px-3"
+                      >
+                        Recover
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setLogToDeletePermanently(log)}
+                        title="Permanently Delete"
+                        className="p-1.5 sm:p-2 rounded-xl text-[var(--text-muted)] hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
@@ -1094,6 +1235,18 @@ export default function ProfilePage() {
         title="Empty Entire Recycle Bin?"
         message="Are you sure you want to permanently delete all archived records in the recycle bin? None of these items will be recoverable."
         confirmText="Empty Recycle Bin"
+        variant="danger"
+      />
+
+      {/* Confirmation Modal for Unlinking Google Sheets */}
+      <ConfirmModal
+        isOpen={isUnlinkModalOpen}
+        onClose={() => setIsUnlinkModalOpen(false)}
+        onConfirm={handleUnlinkGoogleSheets}
+        isLoading={isUnlinkingSheets}
+        title="Unlink & Reset Google Sheet?"
+        message="Are you sure you want to unlink and reset your Google Spreadsheet? This removes the spreadsheet link and deletes it from Google Drive so you can start completely fresh on your next sync."
+        confirmText="Unlink & Reset"
         variant="danger"
       />
     </div>

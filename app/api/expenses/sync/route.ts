@@ -151,8 +151,8 @@ async function processExpense(
             userId,
             entityType: "expense",
             entityId: existing.clientId || existing._id.toString(),
-            title: existing.note || `Expense: ${existing.amount}`,
-            details: `${existing.amount} • ${new Date(existing.date).toLocaleDateString()}`,
+            title: existing.note?.trim() || "Expense",
+            details: existing.date ? new Date(existing.date).toISOString().split("T")[0] : "Recent",
             data: existing.toObject(),
             deletedAt: new Date(),
           },
@@ -169,8 +169,8 @@ async function processExpense(
             userId,
             entityType: "expense",
             entityId: clientId || String(payload.id),
-            title: (snap.note as string) || `Expense: ${snap.amount}`,
-            details: `${snap.amount} • ${snap.date ? new Date(snap.date as string).toLocaleDateString() : "Recent"}`,
+            title: (snap.note as string)?.trim() || "Expense",
+            details: snap.date ? String(snap.date).split("T")[0] : "Recent",
             data: snap,
             deletedAt: new Date(),
           },
@@ -195,7 +195,54 @@ async function processTag(
 
   const effectiveClientId = clientId || (typeof payload._id === "string" ? payload._id : "");
 
-  if (action === "create" || action === "update") {
+  if (action === "update") {
+    const targetId = String(payload.id || payload._id || clientId);
+    const isValidObjectId = mongoose.Types.ObjectId.isValid(targetId) && /^[a-f\d]{24}$/i.test(targetId);
+    const filter = isValidObjectId
+      ? { _id: new mongoose.Types.ObjectId(targetId), userId }
+      : { clientId: effectiveClientId || targetId, userId };
+
+    let tag = await Tag.findOneAndUpdate(
+      filter,
+      {
+        $set: {
+          userId,
+          name: tagName,
+          colorKey: typeof payload.colorKey === "string"
+            ? payload.colorKey
+            : "#22C55E",
+          ...(effectiveClientId ? { clientId: effectiveClientId } : {}),
+        },
+      },
+      { new: true }
+    );
+
+    if (!tag) {
+      tag = await Tag.findOneAndUpdate(
+        { name: tagName, userId },
+        {
+          $set: {
+            userId,
+            name: tagName,
+            colorKey: typeof payload.colorKey === "string"
+              ? payload.colorKey
+              : "#22C55E",
+            ...(effectiveClientId ? { clientId: effectiveClientId } : {}),
+          },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    }
+
+    if (tag) {
+      const serverId = tag._id.toString();
+      if (effectiveClientId) {
+        tagMap.set(effectiveClientId, serverId);
+      }
+      tagMap.set(tagName.toLowerCase(), serverId);
+    }
+
+  } else if (action === "create") {
     // Tags are identified by { name, userId } — their compound unique index.
     const tag = await Tag.findOneAndUpdate(
       { name: tagName, userId },
@@ -219,7 +266,6 @@ async function processTag(
       }
       tagMap.set(tagName.toLowerCase(), serverId);
     }
-
   } else if (action === "delete") {
     let tag = null;
     if (tagName) {
@@ -352,8 +398,8 @@ async function processSaving(
             userId,
             entityType: "saving",
             entityId: existing.clientId || existing._id.toString(),
-            title: existing.note || `${existing.type === "deposit" ? "Deposit" : "Withdrawal"}: ${existing.amount}`,
-            details: `${existing.type === "deposit" ? "Deposit" : "Withdrawal"} • ${existing.amount} • ${new Date(existing.date).toLocaleDateString()}`,
+            title: existing.note?.trim() || (existing.type === "deposit" ? "Savings Deposit" : "Savings Withdrawal"),
+            details: existing.date ? new Date(existing.date).toISOString().split("T")[0] : "Recent",
             data: existing.toObject(),
             deletedAt: new Date(),
           },
@@ -370,8 +416,8 @@ async function processSaving(
             userId,
             entityType: "saving",
             entityId: clientId || String(payload.id),
-            title: (snap.note as string) || `Saving: ${snap.amount}`,
-            details: `${snap.type || "Saving"} • ${snap.amount}`,
+            title: (snap.note as string)?.trim() || ((snap.type as string) === "deposit" ? "Savings Deposit" : "Savings Withdrawal"),
+            details: snap.date ? String(snap.date).split("T")[0] : "Recent",
             data: snap,
             deletedAt: new Date(),
           },

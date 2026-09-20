@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import { Tag } from "@/models/Tag";
 import { Expense } from "@/models/Expense";
@@ -110,12 +111,33 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    const tag = await Tag.findOne({ _id: id, userId });
+    const isValidObjectId = mongoose.Types.ObjectId.isValid(id) && /^[a-f\d]{24}$/i.test(id);
+    const tag = await Tag.findOne({
+      userId,
+      $or: [
+        ...(isValidObjectId ? [{ _id: id }] : []),
+        { clientId: id },
+      ],
+    });
     if (!tag) {
       return NextResponse.json({ error: "Tag not found" }, { status: 404 });
     }
 
-    if (name) tag.name = name.trim();
+    if (name) {
+      const trimmed = name.trim();
+      const duplicate = await Tag.findOne({
+        userId,
+        name: { $regex: new RegExp(`^${trimmed.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}$`, "i") },
+        _id: { $ne: tag._id },
+      });
+      if (duplicate) {
+        return NextResponse.json(
+          { error: "Another category with this name already exists" },
+          { status: 409 }
+        );
+      }
+      tag.name = trimmed;
+    }
     if (colorKey) tag.colorKey = colorKey;
     await tag.save();
 

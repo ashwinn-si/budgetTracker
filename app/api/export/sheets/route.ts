@@ -283,7 +283,6 @@ export async function POST(req: NextRequest) {
               tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
               gridProperties: {
                 frozenRowCount: 6,
-                showGridLines: true,
               },
             },
           },
@@ -294,7 +293,7 @@ export async function POST(req: NextRequest) {
               tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
               gridProperties: {
                 frozenRowCount: 4,
-                showGridLines: false,
+                hideGridlines: true,
               },
             },
           },
@@ -551,5 +550,65 @@ export async function POST(req: NextRequest) {
     console.error("Google Sheets sync error:", error);
     const message = error instanceof Error ? error.message : "Sync failed";
     return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const userSession = await getCurrentUser(req);
+    const userId = userSession?.userId;
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const db = await connectToDatabase();
+    if (!db) {
+      return NextResponse.json({ error: "Database unavailable" }, { status: 503 });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    const oldSpreadsheetId = user.sheetsSpreadsheetId;
+
+    // If user has googleAccessToken and an existing spreadsheetId, attempt to delete/trash from Google Drive
+    if (oldSpreadsheetId && user.googleAccessToken) {
+      try {
+        const oauth2Client = new google.auth.OAuth2(
+          process.env.GOOGLE_CLIENT_ID,
+          process.env.GOOGLE_CLIENT_SECRET
+        );
+        oauth2Client.setCredentials({
+          access_token: user.googleAccessToken,
+          refresh_token: user.googleRefreshToken || undefined,
+        });
+        const drive = google.drive({ version: "v3", auth: oauth2Client });
+        // Attempt to delete or trash the spreadsheet file
+        await drive.files.delete({ fileId: oldSpreadsheetId }).catch(async () => {
+          await drive.files.update({
+            fileId: oldSpreadsheetId,
+            requestBody: { trashed: true },
+          }).catch(() => {});
+        });
+      } catch (driveErr) {
+        console.warn("Could not delete file from Google Drive:", driveErr);
+      }
+    }
+
+    // Reset user sheets state in database
+    user.sheetsLinked = false;
+    user.sheetsSpreadsheetId = null as any;
+    user.sheetsLastSyncedAt = null as any;
+    await user.save();
+
+    return NextResponse.json({
+      success: true,
+      message: "Google Sheet unlinked successfully. You can now start fresh.",
+    });
+  } catch (error: unknown) {
+    console.error("DELETE /api/export/sheets error:", error);
+    return NextResponse.json({ error: "Failed to unlink Google Sheet" }, { status: 500 });
   }
 }

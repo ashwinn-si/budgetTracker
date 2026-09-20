@@ -219,8 +219,8 @@ export async function queueExpenseDeletion(clientId: string) {
       userId: exp.userId,
       entityType: "expense",
       entityId: clientId,
-      title: exp.note || `Expense: ${exp.amount}`,
-      details: `${exp.amount} • ${exp.date ? exp.date.split("T")[0] : "Recent"}`,
+      title: exp.note?.trim() || "Expense",
+      details: exp.date ? exp.date.split("T")[0] : "Recent",
       data: { ...exp },
       deletedAt: new Date().toISOString(),
       syncStatus: "pending",
@@ -311,8 +311,8 @@ export async function queueSavingDeletion(clientId: string) {
       userId: saving.userId,
       entityType: "saving",
       entityId: clientId,
-      title: saving.note || `${saving.type === "deposit" ? "Deposit" : "Withdrawal"}: ${saving.amount}`,
-      details: `${saving.type === "deposit" ? "Deposit" : "Withdrawal"} • ${saving.amount} • ${saving.date ? saving.date.split("T")[0] : "Recent"}`,
+      title: saving.note?.trim() || (saving.type === "deposit" ? "Savings Deposit" : "Savings Withdrawal"),
+      details: saving.date ? saving.date.split("T")[0] : "Recent",
       data: { ...saving },
       deletedAt: new Date().toISOString(),
       syncStatus: "pending",
@@ -350,6 +350,29 @@ export async function queueTagCreation(tag: LocalTag) {
     action: "create",
     entity: "tag",
     payload: { ...tag },
+    createdAt: Date.now(),
+  };
+
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+  }
+}
+
+export async function queueTagUpdate(tag: LocalTag) {
+  await db.tags.put(tag);
+
+  const item: SyncQueueItem = {
+    clientId: tag._id,
+    action: "update",
+    entity: "tag",
+    payload: { id: tag._id, ...tag },
     createdAt: Date.now(),
   };
 

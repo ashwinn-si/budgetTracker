@@ -4,13 +4,15 @@ import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, LocalTag } from "@/lib/offline/db";
-import { queueTagCreation, queueTagDeletion, deduplicateLocalTags } from "@/lib/offline/syncQueue";
+import { queueTagCreation, queueTagUpdate, queueTagDeletion, deduplicateLocalTags } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
 import { useAuth } from "@/context/AuthContext";
+import toast from "react-hot-toast";
 import {
   Tags as TagsIcon,
   Plus,
   Trash2,
+  Pencil,
   ReceiptText,
   Sparkles,
   TrendingUp,
@@ -46,6 +48,12 @@ export default function TagsPage() {
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
   const [tagToDelete, setTagToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Edit tag state
+  const [editingTag, setEditingTag] = useState<LocalTag | null>(null);
+  const [editTagName, setEditTagName] = useState("");
+  const [editSelectedColor, setEditSelectedColor] = useState(PRESET_COLORS[0]);
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Run local tag deduplication immediately on mount
   useEffect(() => {
@@ -131,6 +139,51 @@ export default function TagsPage() {
 
   const handleDeleteTag = (tagId: string, name: string) => {
     setTagToDelete({ id: tagId, name });
+  };
+
+  const handleStartEdit = (tag: LocalTag) => {
+    setEditingTag(tag);
+    setEditTagName(tag.name);
+    setEditSelectedColor(tag.colorKey || PRESET_COLORS[0]);
+    setEditError(null);
+  };
+
+  const handleUpdateTag = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!editingTag || isSaving) return;
+
+    const trimmed = editTagName.trim();
+    if (!trimmed) {
+      setEditError("Please enter a category name.");
+      return;
+    }
+
+    const exists = allTags.some(
+      (t) => t._id !== editingTag._id && t.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (exists) {
+      setEditError("Another category with this name already exists.");
+      return;
+    }
+
+    setIsSaving(true);
+    setEditError(null);
+    try {
+      const updated: LocalTag = {
+        ...editingTag,
+        name: trimmed,
+        colorKey: editSelectedColor,
+      };
+
+      await queueTagUpdate(updated);
+      setEditingTag(null);
+      toast.success("Category updated successfully!");
+    } catch (err) {
+      console.error("Failed to update tag:", err);
+      setEditError("Could not update category. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -366,14 +419,24 @@ export default function TagsPage() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleDeleteTag(tag._id, tag.name)}
-                    aria-label={`Delete ${tag.name}`}
-                    title="Delete Category"
-                    className="p-2 rounded-xl text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer opacity-70 group-hover:opacity-100"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => handleStartEdit(tag)}
+                      aria-label={`Edit ${tag.name}`}
+                      title="Edit Category"
+                      className="p-2 rounded-xl text-[var(--text-muted)] hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTag(tag._id, tag.name)}
+                      aria-label={`Delete ${tag.name}`}
+                      title="Delete Category"
+                      className="p-2 rounded-xl text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
 
                 <div className="pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-between">
@@ -415,6 +478,109 @@ export default function TagsPage() {
         confirmText="Delete Category"
         variant="danger"
       />
+
+      {/* Category Tag Edit Modal */}
+      <Modal
+        isOpen={!!editingTag}
+        onClose={() => {
+          setEditingTag(null);
+          setEditError(null);
+        }}
+        title="Edit Category Tag"
+        subtitle="Update the name or accent color of this category."
+        footer={
+          <>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setEditingTag(null);
+                setEditError(null);
+              }}
+              fullWidth
+              className="sm:w-auto px-5 bg-white/70 dark:bg-white/10 border-black/10 dark:border-white/10 shadow-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={() => handleUpdateTag()}
+              isLoading={isSaving}
+              fullWidth
+              className="sm:w-auto px-6 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 shadow-lg shadow-emerald-500/30"
+            >
+              Update Category
+            </Button>
+          </>
+        }
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            handleUpdateTag();
+          }}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
+              Category Name
+            </label>
+            <input
+              type="text"
+              value={editTagName}
+              onChange={(e) => {
+                setEditTagName(e.target.value);
+                setEditError(null);
+              }}
+              placeholder="e.g., Subscriptions, Pet Care, Travel..."
+              autoFocus
+              className="w-full px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
+            />
+            {editError && <p className="text-xs text-rose-500 mt-1.5">{editError}</p>}
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
+              Pick Accent Color
+            </label>
+            <div className="flex flex-wrap gap-2.5">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => setEditSelectedColor(color)}
+                  style={{ backgroundColor: color }}
+                  className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
+                    editSelectedColor === color
+                      ? "ring-3 ring-offset-2 ring-emerald-500 scale-110 shadow-md"
+                      : "opacity-80 hover:opacity-100 hover:scale-105"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Live Preview */}
+          <div className="pt-2 flex items-center gap-2">
+            <span className="text-xs text-[var(--text-muted)] font-medium">
+              Preview Badge:
+            </span>
+            <span
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-xs"
+              style={{
+                backgroundColor: `${editSelectedColor}20`,
+                color: editSelectedColor,
+                border: `1px solid ${editSelectedColor}40`,
+              }}
+            >
+              <span
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: editSelectedColor }}
+              />
+              {editTagName.trim() || "Preview Category"}
+            </span>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
