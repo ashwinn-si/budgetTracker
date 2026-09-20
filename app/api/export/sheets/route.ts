@@ -76,6 +76,7 @@ export async function POST(req: NextRequest) {
     let startDateParam: string | null = null;
     let endDateParam: string | null = null;
     let tagIdsParam: string[] = [];
+    let isFresh = false;
 
     try {
       const body = await req.json();
@@ -85,18 +86,28 @@ export async function POST(req: NextRequest) {
         if (Array.isArray(body.tagIds)) {
           tagIdsParam = body.tagIds;
         }
+        if (body.action === "fresh" || body.reset === true || body.fresh === true) {
+          isFresh = true;
+        }
       }
     } catch {
       // Body may be empty
     }
 
+    const url = new URL(req.url);
     if (!startDateParam || !endDateParam) {
-      const url = new URL(req.url);
       startDateParam = startDateParam || url.searchParams.get("startDate");
       endDateParam = endDateParam || url.searchParams.get("endDate");
       if (tagIdsParam.length === 0) {
         const qTagIds = url.searchParams.get("tagIds")?.split(",").filter(Boolean);
         if (qTagIds) tagIdsParam = qTagIds;
+      }
+    }
+    if (!isFresh) {
+      const qAction = url.searchParams.get("action");
+      const qReset = url.searchParams.get("reset");
+      if (qAction === "fresh" || qReset === "true") {
+        isFresh = true;
       }
     }
 
@@ -183,7 +194,28 @@ export async function POST(req: NextRequest) {
       refresh_token: user.googleRefreshToken || undefined,
     });
 
+    // Automatically persist refreshed tokens back to database
+    oauth2Client.on("tokens", async (tokens) => {
+      try {
+        let changed = false;
+        if (tokens.access_token && tokens.access_token !== user.googleAccessToken) {
+          user.googleAccessToken = tokens.access_token;
+          changed = true;
+        }
+        if (tokens.refresh_token && tokens.refresh_token !== user.googleRefreshToken) {
+          user.googleRefreshToken = tokens.refresh_token;
+          changed = true;
+        }
+        if (changed) {
+          await user.save();
+        }
+      } catch (tokenErr) {
+        console.warn("Failed to update refreshed Google OAuth tokens:", tokenErr);
+      }
+    });
+
     const sheets = google.sheets({ version: "v4", auth: oauth2Client });
+    const drive = google.drive({ version: "v3", auth: oauth2Client });
 
     // Build Tab 1 ("Expenses") rows
     const expensesRows: (string | number)[][] = [
@@ -238,7 +270,7 @@ export async function POST(req: NextRequest) {
       ["Tag", "Total", "Transactions", "% of Total"],
     ];
 
-    let summaryStartRow = 5;
+    const summaryStartRow = 5;
     for (let i = 0; i < sortedTags.length; i++) {
       const item = sortedTags[i];
       const currentRow = summaryStartRow + i;
@@ -269,43 +301,146 @@ export async function POST(req: NextRequest) {
 
     const sheetTitle = `Budget Tracker Export — ${startFileStr} to ${endFileStr}`;
 
-    // Create a new spreadsheet with the exact 2 tabs and structure
-    const createRes = await (sheets.spreadsheets.create as any)({
-      requestBody: {
-        properties: {
-          title: sheetTitle,
-        },
-        sheets: [
-          {
-            properties: {
-              sheetId: 0,
-              title: "Expenses",
-              tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
-              gridProperties: {
-                frozenRowCount: 6,
-              },
-            },
-          },
-          {
-            properties: {
-              sheetId: 1,
-              title: "Summary by Tag",
-              tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
-              gridProperties: {
-                frozenRowCount: 4,
-                hideGridlines: true,
-              },
-            },
-          },
-        ],
-      },
-    });
+    let spreadsheetId = user.sheetsSpreadsheetId || null;
+    let expensesSheetId = 0;
+    let summarySheetId = 1;
+    let isUpdate = false;
 
-    const spreadsheetId = createRes.data.spreadsheetId;
+    // If user requested a fresh sync, delete the old file from Google Drive first
+    if (isFresh && spreadsheetId) {
+      try {
+        await drive.files.delete({ fileId: spreadsheetId }).catch(async () => {
+          await drive.files.update({
+            fileId: spreadsheetId!,
+            requestBody: { trashed: true },
+          }).catch(() => {});
+        });
+      } catch (driveErr) {
+        console.warn("Could not delete old spreadsheet from Google Drive:", driveErr);
+      }
+      spreadsheetId = null;
+    }
+
+    let existingExpSheet: any = null;
+    let existingSumSheet: any = null;
+
+    // If not fresh and we have an existing spreadsheetId, verify it still exists in Google Drive
+    if (!isFresh && spreadsheetId) {
+      try {
+        const existingRes = await sheets.spreadsheets.get({ spreadsheetId });
+        const existingSheets = existingRes.data.sheets || [];
+
+        existingExpSheet = existingSheets.find(
+          (s) => s.properties?.title === "Expenses"
+        );
+        existingSumSheet = existingSheets.find(
+          (s) => s.properties?.title === "Summary by Tag"
+        );
+
+        if (existingExpSheet?.properties?.sheetId != null) {
+          expensesSheetId = existingExpSheet.properties.sheetId;
+        }
+        if (existingSumSheet?.properties?.sheetId != null) {
+          summarySheetId = existingSumSheet.properties.sheetId;
+        }
+
+        // If tabs are missing from the existing sheet, add them
+        const addSheetRequests: any[] = [];
+        if (!existingExpSheet) {
+          expensesSheetId = 0;
+          addSheetRequests.push({
+            addSheet: {
+              properties: {
+                sheetId: expensesSheetId,
+                title: "Expenses",
+                tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
+                gridProperties: { frozenRowCount: 6 },
+              },
+            },
+          });
+        }
+        if (!existingSumSheet) {
+          summarySheetId = 1;
+          addSheetRequests.push({
+            addSheet: {
+              properties: {
+                sheetId: summarySheetId,
+                title: "Summary by Tag",
+                tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
+                gridProperties: { frozenRowCount: 4, hideGridlines: true },
+              },
+            },
+          });
+        }
+
+        if (addSheetRequests.length > 0) {
+          await sheets.spreadsheets.batchUpdate({
+            spreadsheetId,
+            requestBody: { requests: addSheetRequests },
+          });
+        }
+
+        // Clear existing data ranges so stale entries are removed
+        await sheets.spreadsheets.values.batchClear({
+          spreadsheetId,
+          requestBody: {
+            ranges: ["'Expenses'!A:Z", "'Summary by Tag'!A:Z"],
+          },
+        });
+
+        isUpdate = true;
+      } catch (fetchErr: any) {
+        // If 404 or sheet not accessible, fall back to creating a new one
+        if (fetchErr?.code === 404 || fetchErr?.status === 404) {
+          spreadsheetId = null;
+        } else {
+          throw fetchErr;
+        }
+      }
+    }
+
+    // If we don't have a spreadsheet (either was fresh, didn't exist, or was deleted/404)
+    if (!spreadsheetId) {
+      expensesSheetId = 0;
+      summarySheetId = 1;
+
+      const createRes = await (sheets.spreadsheets.create as any)({
+        requestBody: {
+          properties: {
+            title: sheetTitle,
+          },
+          sheets: [
+            {
+              properties: {
+                sheetId: expensesSheetId,
+                title: "Expenses",
+                tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
+                gridProperties: {
+                  frozenRowCount: 6,
+                },
+              },
+            },
+            {
+              properties: {
+                sheetId: summarySheetId,
+                title: "Summary by Tag",
+                tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
+                gridProperties: {
+                  frozenRowCount: 4,
+                  hideGridlines: true,
+                },
+              },
+            },
+          ],
+        },
+      });
+
+      spreadsheetId = createRes.data.spreadsheetId;
+    }
 
     if (!spreadsheetId) {
       return NextResponse.json(
-        { error: "Could not create spreadsheet" },
+        { error: "Could not create or locate spreadsheet in Google Drive." },
         { status: 500 }
       );
     }
@@ -334,19 +469,39 @@ export async function POST(req: NextRequest) {
     const whiteColor = { red: 1, green: 1, blue: 1 };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const formattingRequests: any[] = [
-      // --- Expenses Tab Formatting ---
-      // Merge Title A1:D1
-      {
+    const formattingRequests: any[] = [];
+
+    // If updating an existing sheet, update its title to reflect current export period
+    if (isUpdate) {
+      formattingRequests.push({
+        updateSpreadsheetProperties: {
+          properties: {
+            title: sheetTitle,
+          },
+          fields: "title",
+        },
+      });
+    }
+
+    // --- Expenses Tab Formatting ---
+    // Check if title A1:D1 is already merged on existing sheet
+    const expMergedTitle = existingExpSheet?.merges?.some(
+      (m: any) => m.startRowIndex === 0 && m.endRowIndex === 1 && m.startColumnIndex === 0 && m.endColumnIndex === 4
+    );
+    if (!expMergedTitle) {
+      formattingRequests.push({
         mergeCells: {
-          range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
+          range: { sheetId: expensesSheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
           mergeType: "MERGE_ALL",
         },
-      },
+      });
+    }
+
+    formattingRequests.push(
       // Title text style
       {
         repeatCell: {
-          range: { sheetId: 0, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+          range: { sheetId: expensesSheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
           cell: {
             userEnteredFormat: {
               textFormat: { bold: true, fontSize: 14, foregroundColor: greenColor },
@@ -358,7 +513,7 @@ export async function POST(req: NextRequest) {
       // Header row styling (row 6: index 5 to 6)
       {
         repeatCell: {
-          range: { sheetId: 0, startRowIndex: 5, endRowIndex: 6, startColumnIndex: 0, endColumnIndex: 4 },
+          range: { sheetId: expensesSheetId, startRowIndex: 5, endRowIndex: 6, startColumnIndex: 0, endColumnIndex: 4 },
           cell: {
             userEnteredFormat: {
               backgroundColor: greenColor,
@@ -367,40 +522,46 @@ export async function POST(req: NextRequest) {
           },
           fields: "userEnteredFormat(backgroundColor,textFormat)",
         },
-      },
-      // AutoFilter on header row
-      {
+      }
+    );
+
+    // AutoFilter on header row (only set if not already present on existing sheet)
+    if (!existingExpSheet?.basicFilter) {
+      formattingRequests.push({
         setBasicFilter: {
           filter: {
-            range: { sheetId: 0, startRowIndex: 5, endRowIndex: 6, startColumnIndex: 0, endColumnIndex: 4 },
+            range: { sheetId: expensesSheetId, startRowIndex: 5, endRowIndex: 6, startColumnIndex: 0, endColumnIndex: 4 },
           },
         },
-      },
-      // Column widths for Expenses (16, 34, 26, 16 in character width ~ 120px, 240px, 180px, 120px)
+      });
+    }
+
+    formattingRequests.push(
+      // Column widths for Expenses
       {
         updateDimensionProperties: {
-          range: { sheetId: 0, dimension: "COLUMNS", startIndex: 0, endIndex: 1 },
+          range: { sheetId: expensesSheetId, dimension: "COLUMNS", startIndex: 0, endIndex: 1 },
           properties: { pixelSize: 120 },
           fields: "pixelSize",
         },
       },
       {
         updateDimensionProperties: {
-          range: { sheetId: 0, dimension: "COLUMNS", startIndex: 1, endIndex: 2 },
+          range: { sheetId: expensesSheetId, dimension: "COLUMNS", startIndex: 1, endIndex: 2 },
           properties: { pixelSize: 240 },
           fields: "pixelSize",
         },
       },
       {
         updateDimensionProperties: {
-          range: { sheetId: 0, dimension: "COLUMNS", startIndex: 2, endIndex: 3 },
+          range: { sheetId: expensesSheetId, dimension: "COLUMNS", startIndex: 2, endIndex: 3 },
           properties: { pixelSize: 180 },
           fields: "pixelSize",
         },
       },
       {
         updateDimensionProperties: {
-          range: { sheetId: 0, dimension: "COLUMNS", startIndex: 3, endIndex: 4 },
+          range: { sheetId: expensesSheetId, dimension: "COLUMNS", startIndex: 3, endIndex: 4 },
           properties: { pixelSize: 120 },
           fields: "pixelSize",
         },
@@ -408,7 +569,7 @@ export async function POST(req: NextRequest) {
       // Expenses Amount column number format (D7:D)
       {
         repeatCell: {
-          range: { sheetId: 0, startRowIndex: 6, endRowIndex: expensesRows.length, startColumnIndex: 3, endColumnIndex: 4 },
+          range: { sheetId: expensesSheetId, startRowIndex: 6, endRowIndex: expensesRows.length, startColumnIndex: 3, endColumnIndex: 4 },
           cell: {
             userEnteredFormat: {
               numberFormat: { type: "CURRENCY", pattern: `"${currencyInfo.symbol}"#,##0.00` },
@@ -417,20 +578,47 @@ export async function POST(req: NextRequest) {
           },
           fields: "userEnteredFormat(numberFormat,horizontalAlignment)",
         },
-      },
+      }
+    );
 
-      // --- Summary by Tag Tab Formatting ---
-      // Merge Title A1:D1
-      {
+    // --- Summary by Tag Tab Formatting ---
+    // Check if title A1:D1 is already merged on summary sheet
+    const sumMergedTitle = existingSumSheet?.merges?.some(
+      (m: any) => m.startRowIndex === 0 && m.endRowIndex === 1 && m.startColumnIndex === 0 && m.endColumnIndex === 4
+    );
+    if (!sumMergedTitle) {
+      formattingRequests.push({
         mergeCells: {
-          range: { sheetId: 1, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
+          range: { sheetId: summarySheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 4 },
           mergeType: "MERGE_ALL",
         },
-      },
+      });
+    }
+
+    // Unmerge old footnote on Summary tab if updating
+    if (isUpdate && existingSumSheet?.merges) {
+      for (const m of existingSumSheet.merges) {
+        if (m.startRowIndex != null && m.startRowIndex >= 4) {
+          formattingRequests.push({
+            unmergeCells: {
+              range: {
+                sheetId: summarySheetId,
+                startRowIndex: m.startRowIndex,
+                endRowIndex: m.endRowIndex,
+                startColumnIndex: m.startColumnIndex,
+                endColumnIndex: m.endColumnIndex,
+              },
+            },
+          });
+        }
+      }
+    }
+
+    formattingRequests.push(
       // Title text style
       {
         repeatCell: {
-          range: { sheetId: 1, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
+          range: { sheetId: summarySheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 1 },
           cell: {
             userEnteredFormat: {
               textFormat: { bold: true, fontSize: 14, foregroundColor: greenColor },
@@ -442,7 +630,7 @@ export async function POST(req: NextRequest) {
       // Header row styling (row 4: index 3 to 4)
       {
         repeatCell: {
-          range: { sheetId: 1, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 0, endColumnIndex: 4 },
+          range: { sheetId: summarySheetId, startRowIndex: 3, endRowIndex: 4, startColumnIndex: 0, endColumnIndex: 4 },
           cell: {
             userEnteredFormat: {
               backgroundColor: greenColor,
@@ -452,31 +640,31 @@ export async function POST(req: NextRequest) {
           fields: "userEnteredFormat(backgroundColor,textFormat)",
         },
       },
-      // Column widths for Summary by Tag (22, 16, 14, 12 ~ 160px, 120px, 100px, 90px)
+      // Column widths for Summary by Tag
       {
         updateDimensionProperties: {
-          range: { sheetId: 1, dimension: "COLUMNS", startIndex: 0, endIndex: 1 },
+          range: { sheetId: summarySheetId, dimension: "COLUMNS", startIndex: 0, endIndex: 1 },
           properties: { pixelSize: 160 },
           fields: "pixelSize",
         },
       },
       {
         updateDimensionProperties: {
-          range: { sheetId: 1, dimension: "COLUMNS", startIndex: 1, endIndex: 2 },
+          range: { sheetId: summarySheetId, dimension: "COLUMNS", startIndex: 1, endIndex: 2 },
           properties: { pixelSize: 120 },
           fields: "pixelSize",
         },
       },
       {
         updateDimensionProperties: {
-          range: { sheetId: 1, dimension: "COLUMNS", startIndex: 2, endIndex: 3 },
+          range: { sheetId: summarySheetId, dimension: "COLUMNS", startIndex: 2, endIndex: 3 },
           properties: { pixelSize: 100 },
           fields: "pixelSize",
         },
       },
       {
         updateDimensionProperties: {
-          range: { sheetId: 1, dimension: "COLUMNS", startIndex: 3, endIndex: 4 },
+          range: { sheetId: summarySheetId, dimension: "COLUMNS", startIndex: 3, endIndex: 4 },
           properties: { pixelSize: 90 },
           fields: "pixelSize",
         },
@@ -484,7 +672,7 @@ export async function POST(req: NextRequest) {
       // Summary Total column currency format (Col B)
       {
         repeatCell: {
-          range: { sheetId: 1, startRowIndex: 4, endRowIndex: summaryTotalRow, startColumnIndex: 1, endColumnIndex: 2 },
+          range: { sheetId: summarySheetId, startRowIndex: 4, endRowIndex: summaryTotalRow, startColumnIndex: 1, endColumnIndex: 2 },
           cell: {
             userEnteredFormat: {
               numberFormat: { type: "CURRENCY", pattern: `"${currencyInfo.symbol}"#,##0.00` },
@@ -497,7 +685,7 @@ export async function POST(req: NextRequest) {
       // Summary % of Total column percent format (Col D)
       {
         repeatCell: {
-          range: { sheetId: 1, startRowIndex: 4, endRowIndex: summaryTotalRow, startColumnIndex: 3, endColumnIndex: 4 },
+          range: { sheetId: summarySheetId, startRowIndex: 4, endRowIndex: summaryTotalRow, startColumnIndex: 3, endColumnIndex: 4 },
           cell: {
             userEnteredFormat: {
               numberFormat: { type: "PERCENT", pattern: "0.0%" },
@@ -510,14 +698,14 @@ export async function POST(req: NextRequest) {
       // Merge Footnote
       {
         mergeCells: {
-          range: { sheetId: 1, startRowIndex: summaryRows.length - 1, endRowIndex: summaryRows.length, startColumnIndex: 0, endColumnIndex: 4 },
+          range: { sheetId: summarySheetId, startRowIndex: summaryRows.length - 1, endRowIndex: summaryRows.length, startColumnIndex: 0, endColumnIndex: 4 },
           mergeType: "MERGE_ALL",
         },
       },
       // Footnote text style (italic, muted)
       {
         repeatCell: {
-          range: { sheetId: 1, startRowIndex: summaryRows.length - 1, endRowIndex: summaryRows.length, startColumnIndex: 0, endColumnIndex: 1 },
+          range: { sheetId: summarySheetId, startRowIndex: summaryRows.length - 1, endRowIndex: summaryRows.length, startColumnIndex: 0, endColumnIndex: 1 },
           cell: {
             userEnteredFormat: {
               textFormat: { italic: true, fontSize: 9.5, foregroundColor: { red: 0.42, green: 0.45, blue: 0.5 } },
@@ -525,15 +713,19 @@ export async function POST(req: NextRequest) {
           },
           fields: "userEnteredFormat.textFormat",
         },
-      },
-    ];
+      }
+    );
 
-    await sheets.spreadsheets.batchUpdate({
-      spreadsheetId,
-      requestBody: {
-        requests: formattingRequests,
-      },
-    });
+    try {
+      await sheets.spreadsheets.batchUpdate({
+        spreadsheetId,
+        requestBody: {
+          requests: formattingRequests,
+        },
+      });
+    } catch (fmtErr) {
+      console.warn("Sheet styling warning (data was written successfully):", fmtErr);
+    }
 
     user.sheetsLinked = true;
     user.sheetsSpreadsheetId = spreadsheetId;
@@ -542,13 +734,22 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      action: isFresh ? "fresh" : isUpdate ? "update" : "create",
       spreadsheetId,
       lastSyncedAt: user.sheetsLastSyncedAt,
       url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
+      message: isFresh
+        ? "Deleted previous Google Sheet and synced a brand-new sheet with all transactions."
+        : isUpdate
+        ? "Updated your existing Google Sheet with the latest transactions."
+        : "Exported your transactions to a new Google Sheet.",
     });
   } catch (error: unknown) {
     console.error("Google Sheets sync error:", error);
-    const message = error instanceof Error ? error.message : "Sync failed";
+    let message = error instanceof Error ? error.message : "Sync failed";
+    if (message.includes("invalid_grant") || message.includes("401")) {
+      message = "Google authorization expired. Please sign out and sign in with Google again.";
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

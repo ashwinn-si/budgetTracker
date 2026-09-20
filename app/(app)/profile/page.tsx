@@ -103,6 +103,36 @@ export default function ProfilePage() {
   const [isResetRequested, setIsResetRequested] = useState(false);
   const [devResetLink, setDevResetLink] = useState<string | null>(null);
 
+  const [isResetSyncing, setIsResetSyncing] = useState(false);
+  const [isDeleteAndSyncModalOpen, setIsDeleteAndSyncModalOpen] = useState(false);
+  const [isUrlCopied, setIsUrlCopied] = useState(false);
+  const [isIdCopied, setIsIdCopied] = useState(false);
+
+  const handleCopySheetsUrl = async () => {
+    if (!activeSheetsUrl) return;
+    try {
+      await navigator.clipboard.writeText(activeSheetsUrl);
+      setIsUrlCopied(true);
+      toast.success("Spreadsheet link copied to clipboard!");
+      setTimeout(() => setIsUrlCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy link to clipboard");
+    }
+  };
+
+  const handleCopySpreadsheetId = async () => {
+    const id = user?.sheetsSpreadsheetId || (activeSheetsUrl ? activeSheetsUrl.split("/d/")[1]?.split("/")[0] : null);
+    if (!id) return;
+    try {
+      await navigator.clipboard.writeText(id);
+      setIsIdCopied(true);
+      toast.success("Spreadsheet ID copied!");
+      setTimeout(() => setIsIdCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy ID to clipboard");
+    }
+  };
+
   const handleSyncGoogleSheets = async () => {
     setIsSheetsSyncing(true);
     setSheetsMessage(null);
@@ -121,14 +151,54 @@ export default function ProfilePage() {
             sheetsLastSyncedAt: data.lastSyncedAt,
           });
         }
-        setSheetsMessage("Spreadsheet synced successfully!");
+        toast.success(data.message || "Spreadsheet synced successfully!");
+        setSheetsMessage(data.message || "Spreadsheet synced successfully!");
       } else {
+        toast.error(data.error || "Please log in with Google to sync to your Drive Sheet.");
         setSheetsMessage(data.error || "Please log in with Google to sync to your Drive Sheet.");
       }
     } catch {
+      toast.error("Could not contact server to sync with Google Sheets.");
       setSheetsMessage("Could not contact server to sync with Google Sheets.");
     } finally {
       setIsSheetsSyncing(false);
+    }
+  };
+
+  const handleDeleteAndSyncFresh = async () => {
+    setIsResetSyncing(true);
+    setSheetsMessage(null);
+    try {
+      const res = await fetch("/api/export/sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "fresh" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setSheetsUrl(data.url);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("budget_sheets_url", data.url);
+        }
+        if (updateUser && data.spreadsheetId) {
+          updateUser({
+            sheetsLinked: true,
+            sheetsSpreadsheetId: data.spreadsheetId,
+            sheetsLastSyncedAt: data.lastSyncedAt,
+          });
+        }
+        toast.success(data.message || "Fresh Google Sheet created and synced!");
+        setSheetsMessage(data.message || "Fresh Google Sheet created and synced!");
+        setIsDeleteAndSyncModalOpen(false);
+      } else {
+        toast.error(data.error || "Failed to reset and resync Google Sheet.");
+        setSheetsMessage(data.error || "Please log in with Google to sync to your Drive Sheet.");
+      }
+    } catch {
+      toast.error("Could not contact server to resync Google Sheets.");
+      setSheetsMessage("Could not contact server to sync with Google Sheets.");
+    } finally {
+      setIsResetSyncing(false);
     }
   };
 
@@ -700,12 +770,32 @@ export default function ProfilePage() {
                     Google Sheets Sync
                   </h3>
                   <p className="text-xs text-[var(--text-muted)]">
-                    Export your ledger to your Google Drive Sheet
+                    Sync your ledger and category summary to Google Drive
                   </p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+                {activeSheetsUrl && (
+                  <button
+                    type="button"
+                    onClick={handleCopySheetsUrl}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 active:scale-95 transition-all cursor-pointer"
+                    title="Copy spreadsheet link"
+                  >
+                    {isUrlCopied ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" />
+                        <span>Copy Link</span>
+                      </>
+                    )}
+                  </button>
+                )}
                 {activeSheetsUrl && (
                   <a
                     href={activeSheetsUrl}
@@ -713,7 +803,7 @@ export default function ProfilePage() {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
                   >
-                    <span>Open Sheet</span>
+                    <span>Open</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </a>
                 )}
@@ -723,8 +813,20 @@ export default function ProfilePage() {
                   onClick={handleSyncGoogleSheets}
                   isLoading={isSheetsSyncing}
                 >
-                  Sync Sheets
+                  Sync Changes
                 </Button>
+                {(activeSheetsUrl || user?.sheetsSpreadsheetId) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsDeleteAndSyncModalOpen(true)}
+                    className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 border-amber-500/20"
+                    icon={<RotateCcw className="w-3.5 h-3.5" />}
+                    title="Delete existing sheet and create fresh"
+                  >
+                    Delete & Resync
+                  </Button>
+                )}
                 {(activeSheetsUrl || user?.sheetsSpreadsheetId) && (
                   <Button
                     variant="ghost"
@@ -763,7 +865,7 @@ export default function ProfilePage() {
               )}
 
               {activeSheetsUrl ? (
-                <div className="pt-2.5 border-t border-black/5 dark:border-white/5 space-y-2">
+                <div className="pt-2.5 border-t border-black/5 dark:border-white/5 space-y-2.5">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[var(--text-secondary)] font-medium">Spreadsheet Link:</span>
                     <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wider">
@@ -771,7 +873,8 @@ export default function ProfilePage() {
                     </span>
                   </div>
 
-                  <div className="p-2.5 sm:p-3 rounded-xl bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 flex items-center justify-between gap-3 shadow-2xs">
+                  {/* URL Box with direct action buttons */}
+                  <div className="p-2.5 sm:p-3 rounded-xl bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
                     <div className="min-w-0 flex items-center gap-2">
                       <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                       <a
@@ -785,22 +888,69 @@ export default function ProfilePage() {
                       </a>
                     </div>
 
-                    <a
-                      href={activeSheetsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-xs font-semibold shadow-sm transition-all cursor-pointer"
-                      id="open-spreadsheet-btn"
-                    >
-                      <span>Open</span>
-                      <ExternalLink className="w-3.5 h-3.5" />
-                    </a>
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                      <button
+                        type="button"
+                        onClick={handleCopySheetsUrl}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-xs font-medium text-[var(--text-primary)] transition-all cursor-pointer active:scale-95"
+                        title="Copy Sheet URL"
+                      >
+                        {isUrlCopied ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy</span>
+                          </>
+                        )}
+                      </button>
+
+                      <a
+                        href={activeSheetsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-white text-xs font-semibold shadow-sm transition-all cursor-pointer"
+                        id="open-spreadsheet-btn"
+                      >
+                        <span>Open</span>
+                        <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
                   </div>
+
+                  {/* Sheet ID info & copy */}
+                  {(user?.sheetsSpreadsheetId || activeSheetsUrl) && (
+                    <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] text-xs">
+                      <span className="text-[var(--text-muted)] text-[11px]">Sheet ID:</span>
+                      <div className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--text-secondary)]">
+                        <span className="max-w-[180px] sm:max-w-none truncate">
+                          {user?.sheetsSpreadsheetId || activeSheetsUrl.split("/d/")[1]?.split("/")[0]}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleCopySpreadsheetId}
+                          className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                          title="Copy Sheet ID"
+                        >
+                          {isIdCopied ? (
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                          ) : (
+                            <Copy className="w-3 h-3" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
-                <div className="pt-2 border-t border-black/5 dark:border-white/5 flex items-center justify-between text-xs text-[var(--text-muted)]">
+                <div className="pt-2 border-t border-black/5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
                   <span>Spreadsheet Link:</span>
-                  <span>Not exported yet. Click &ldquo;Sync Sheets&rdquo; to create.</span>
+                  <div className="flex items-center gap-2">
+                    <span>Not exported yet. Click &ldquo;Sync Changes&rdquo; to create your Google Sheet.</span>
+                  </div>
                 </div>
               )}
 
@@ -1248,6 +1398,18 @@ export default function ProfilePage() {
         message="Are you sure you want to unlink and reset your Google Spreadsheet? This removes the spreadsheet link and deletes it from Google Drive so you can start completely fresh on your next sync."
         confirmText="Unlink & Reset"
         variant="danger"
+      />
+
+      {/* Confirmation Modal for Delete & Sync Fresh Google Sheets */}
+      <ConfirmModal
+        isOpen={isDeleteAndSyncModalOpen}
+        onClose={() => setIsDeleteAndSyncModalOpen(false)}
+        onConfirm={handleDeleteAndSyncFresh}
+        isLoading={isResetSyncing}
+        title="Delete Sheet & Resync Fresh?"
+        message="This will delete your existing Google Sheet from Google Drive and generate a clean, brand-new spreadsheet with all your transactions and category breakdowns. Continue?"
+        confirmText="Delete & Resync Fresh"
+        variant="warning"
       />
     </div>
   );
