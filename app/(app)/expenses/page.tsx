@@ -25,6 +25,7 @@ import { db, LocalExpense } from "@/lib/offline/db";
 import { queueExpenseDeletion, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SelectSheet } from "@/components/ui/SelectSheet";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 export default function ExpensesPage() {
   const { formatAmount, currencyInfo } = useCurrency();
@@ -37,6 +38,7 @@ export default function ExpensesPage() {
   const [selectedMonth, setSelectedMonth] = useState<string>(monthParam || "all");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<LocalExpense | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     if (tagParam) {
@@ -129,14 +131,19 @@ export default function ExpensesPage() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [allExpenses, searchTerm, selectedTag, selectedMonth]);
 
-  const handleDelete = async (clientId: string) => {
-    if (confirm("Are you sure you want to delete this expense?")) {
-      await queueExpenseDeletion(clientId);
-      const saving = await db.savings.where("linkedExpenseId").equals(clientId).first();
-      if (saving) {
-        await queueSavingDeletion(saving.clientId);
-      }
+  const handleDelete = (clientId: string) => {
+    setExpenseToDelete(clientId);
+  };
+
+  const confirmDeleteExpense = async () => {
+    if (!expenseToDelete) return;
+    const clientId = expenseToDelete;
+    await queueExpenseDeletion(clientId);
+    const saving = await db.savings.where("linkedExpenseId").equals(clientId).first();
+    if (saving) {
+      await queueSavingDeletion(saving.clientId);
     }
+    setExpenseToDelete(null);
   };
 
   const handleEdit = (expense: LocalExpense) => {
@@ -362,6 +369,17 @@ export default function ExpensesPage() {
           setEditingExpense(null);
         }}
         initialExpense={editingExpense}
+      />
+
+      {/* Confirmation Modal for Deleting Expense */}
+      <ConfirmModal
+        isOpen={!!expenseToDelete}
+        onClose={() => setExpenseToDelete(null)}
+        onConfirm={confirmDeleteExpense}
+        title="Delete Expense?"
+        message="Are you sure you want to delete this expense record? This will also remove any linked savings entry."
+        confirmText="Delete Expense"
+        variant="danger"
       />
     </div>
   );

@@ -8,6 +8,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { PieChart, TrendingDown, TrendingUp, AlertCircle, Share2, Moon, Sun, ChevronLeft, ChevronRight } from "lucide-react";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { useTheme } from "@/context/ThemeContext";
+import { Loader } from "@/components/ui/Loader";
 
 interface CategoryBreakdown {
   tagId: string;
@@ -65,14 +66,7 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
   }, [shareId, currentDate]);
 
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-neutral-100 dark:bg-neutral-900">
-        <div className="animate-pulse flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin" />
-          <p className="text-[var(--text-muted)] font-medium">Loading Dashboard...</p>
-        </div>
-      </div>
-    );
+    return <Loader fullScreen message="Loading shared dashboard..." showBrand />;
   }
 
   if (error || !data) {

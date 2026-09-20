@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { Loader } from "@/components/ui/Loader";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { useAuth } from "@/context/AuthContext";
@@ -235,7 +236,7 @@ function DashboardContent() {
   // Excel export adhering to strict 2-tab export specification
   const handleExcelExport = async () => {
     setIsExporting(true);
-    startLoading();
+    startLoading("Generating Excel report...");
     try {
       const startStr = dateRanges.start.toISOString().split("T")[0];
       const endStr = dateRanges.end.toISOString().split("T")[0];
@@ -605,8 +606,8 @@ export default function DashboardPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-[50vh] text-sm text-[var(--text-muted)]">
-          <div className="animate-pulse">Loading dashboard analytics...</div>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <Loader message="Loading dashboard analytics..." />
         </div>
       }
     >

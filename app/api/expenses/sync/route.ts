@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
 import { Tag } from "@/models/Tag";
@@ -26,7 +27,8 @@ interface FailedItem {
 
 async function processExpense(
   item: SyncItem,
-  userId: string
+  userId: string,
+  tagMap: Map<string, string>
 ): Promise<void> {
   const { payload, action, clientId } = item;
 
@@ -46,16 +48,73 @@ async function processExpense(
       date = new Date(); // Fall back to now rather than failing the whole item
     }
 
-    const filter: Record<string, unknown> = clientId
-      ? { clientId, userId }
-      : { _id: payload._id, userId };
+    // Safely resolve tagIds to valid MongoDB ObjectIds
+    // Never allow temporary client IDs (e.g. "tag_1789874834317_f9k1c") to throw CastError
+    const resolvedTagIds: mongoose.Types.ObjectId[] = [];
+    if (Array.isArray(payload.tagIds)) {
+      for (const rawTagId of payload.tagIds) {
+        if (!rawTagId) continue;
+        const idStr = String(rawTagId).trim();
+        if (!idStr) continue;
+
+        // 1. Valid 24-character hex ObjectId
+        if (mongoose.Types.ObjectId.isValid(idStr) && /^[a-f\d]{24}$/i.test(idStr)) {
+          resolvedTagIds.push(new mongoose.Types.ObjectId(idStr));
+          continue;
+        }
+
+        // 2. Mapped in this batch by processTag
+        const mappedId = tagMap.get(idStr) || tagMap.get(idStr.toLowerCase());
+        if (mappedId && mongoose.Types.ObjectId.isValid(mappedId) && /^[a-f\d]{24}$/i.test(mappedId)) {
+          resolvedTagIds.push(new mongoose.Types.ObjectId(mappedId));
+          continue;
+        }
+
+        // 3. Query Tag collection by clientId, name, or legacy tag name
+        const legacyNames: Record<string, string> = {
+          tag_groceries: "Groceries",
+          tag_dining: "Dining & Coffee",
+          tag_housing: "Housing & Bills",
+          tag_wellness: "Health & Gym",
+          tag_transport: "Transport",
+          tag_leisure: "Entertainment",
+        };
+        const searchName = legacyNames[idStr] || idStr;
+
+        const dbTag = await Tag.findOne({
+          userId,
+          $or: [
+            { clientId: idStr },
+            { name: searchName },
+            { name: { $regex: new RegExp(`^${searchName.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}$`, "i") } },
+          ],
+        });
+        if (dbTag) {
+          const sId = dbTag._id as mongoose.Types.ObjectId;
+          resolvedTagIds.push(sId);
+          tagMap.set(idStr, sId.toString());
+          continue;
+        }
+
+        // Tag could not be resolved from DB or current batch - omit rather than throwing a fatal CastError
+        console.warn(`[sync] Omitted unresolvable tagId "${idStr}" for expense ${clientId}`);
+      }
+    }
+
+    const effectiveClientId = clientId || (payload.clientId as string) || (typeof payload._id === "string" ? payload._id : "");
+    const isValidObjectId = payload._id && mongoose.Types.ObjectId.isValid(String(payload._id)) && /^[a-f\d]{24}$/i.test(String(payload._id));
+    const filter: Record<string, unknown> = effectiveClientId
+      ? { clientId: effectiveClientId, userId }
+      : isValidObjectId
+      ? { _id: payload._id, userId }
+      : { clientId: String(payload._id || clientId), userId };
 
     const updateDoc = {
       userId,
-      clientId,
+      clientId: effectiveClientId,
       amount,
       note: typeof payload.note === "string" ? payload.note.trim() : "",
-      tagIds: Array.isArray(payload.tagIds) ? payload.tagIds : [],
+      tagIds: resolvedTagIds,
       date,
       syncStatus: "synced",
       ...(payload.updatedAt
@@ -88,21 +147,21 @@ async function processExpense(
 
 async function processTag(
   item: SyncItem,
-  userId: string
+  userId: string,
+  tagMap: Map<string, string>
 ): Promise<void> {
   const { payload, action, clientId } = item;
   const tagName = typeof payload.name === "string" ? payload.name.trim() : "";
 
-  if (!tagName) {
+  if (!tagName && action !== "delete") {
     throw new Error("Tag is missing a name");
   }
 
+  const effectiveClientId = clientId || (typeof payload._id === "string" ? payload._id : "");
+
   if (action === "create" || action === "update") {
     // Tags are identified by { name, userId } — their compound unique index.
-    // Local tag IDs (e.g. "tag_groceries", "tag_1789843710097_rvbhe") are
-    // Dexie-only identifiers and are NOT valid MongoDB ObjectIds.
-    // Using them as _id would cause a CastError.
-    await Tag.findOneAndUpdate(
+    const tag = await Tag.findOneAndUpdate(
       { name: tagName, userId },
       {
         $set: {
@@ -111,22 +170,40 @@ async function processTag(
           colorKey: typeof payload.colorKey === "string"
             ? payload.colorKey
             : "#22C55E",
+          ...(effectiveClientId ? { clientId: effectiveClientId } : {}),
         },
       },
       { upsert: true, new: true, setDefaultsOnInsert: true }
     );
 
+    if (tag) {
+      const serverId = tag._id.toString();
+      if (effectiveClientId) {
+        tagMap.set(effectiveClientId, serverId);
+      }
+      tagMap.set(tagName.toLowerCase(), serverId);
+    }
+
   } else if (action === "delete") {
     if (tagName) {
-      // Always prefer name-based delete — safe regardless of clientId format
-      await Tag.deleteOne({ name: tagName, userId });
-    } else {
-      // Fall back to _id only when clientId is a valid 24-char hex ObjectId
-      const isValidObjectId = /^[a-f\d]{24}$/i.test(clientId);
-      if (isValidObjectId) {
-        await Tag.deleteOne({ _id: clientId, userId });
+      const tag = await Tag.findOne({ name: tagName, userId });
+      if (tag) {
+        await Expense.updateMany({ userId, tagIds: tag._id }, { $pull: { tagIds: tag._id } });
+        await Tag.deleteOne({ _id: tag._id, userId });
       }
-      // Otherwise: local-only tag never synced to server — nothing to delete
+    } else {
+      const isValidObjectId = /^[a-f\d]{24}$/i.test(clientId);
+      const tag = await Tag.findOne({
+        userId,
+        $or: [
+          ...(isValidObjectId ? [{ _id: clientId }] : []),
+          { clientId },
+        ],
+      });
+      if (tag) {
+        await Expense.updateMany({ userId, tagIds: tag._id }, { $pull: { tagIds: tag._id } });
+        await Tag.deleteOne({ _id: tag._id, userId });
+      }
     }
   }
 }
@@ -156,13 +233,17 @@ async function processSaving(
       date = new Date();
     }
 
-    const filter: Record<string, unknown> = clientId
-      ? { clientId, userId }
-      : { _id: payload._id, userId };
+    const effectiveClientId = clientId || (payload.clientId as string) || (typeof payload._id === "string" ? payload._id : "");
+    const isValidObjectId = payload._id && mongoose.Types.ObjectId.isValid(String(payload._id)) && /^[a-f\d]{24}$/i.test(String(payload._id));
+    const filter: Record<string, unknown> = effectiveClientId
+      ? { clientId: effectiveClientId, userId }
+      : isValidObjectId
+      ? { _id: payload._id, userId }
+      : { clientId: String(payload._id || clientId), userId };
 
     const updateDoc = {
       userId,
-      clientId,
+      clientId: effectiveClientId,
       amount,
       type,
       note: typeof payload.note === "string" ? payload.note.trim() : "",
@@ -265,8 +346,16 @@ export async function POST(req: NextRequest) {
     // those items in the queue for a future retry.
     let processedCount = 0;
     const failedItems: FailedItem[] = [];
+    const tagMap = new Map<string, string>();
 
-    for (const item of items) {
+    // Process all tag items FIRST so tags exist before expenses reference them
+    const orderedItems = [...items].sort((a, b) => {
+      if (a.entity === "tag" && b.entity !== "tag") return -1;
+      if (a.entity !== "tag" && b.entity === "tag") return 1;
+      return 0;
+    });
+
+    for (const item of orderedItems) {
       // Skip structurally invalid items without counting them as failures
       if (
         !item ||
@@ -284,10 +373,10 @@ export async function POST(req: NextRequest) {
       try {
         switch (item.entity) {
           case "expense":
-            await processExpense(item, userId);
+            await processExpense(item, userId, tagMap);
             break;
           case "tag":
-            await processTag(item, userId);
+            await processTag(item, userId, tagMap);
             break;
           case "saving":
             await processSaving(item, userId);
@@ -315,12 +404,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Return a rich response so the client can selectively retry only the
-    // items that actually failed, rather than re-sending the whole queue.
+    // Return a rich response including the tagMap so the client can reconcile
+    // temporary local tag IDs with permanent server ObjectIds.
     return NextResponse.json({
       success: true,
       processed: processedCount,
       failed: failedItems.length,
+      tagMap: Object.fromEntries(tagMap.entries()),
       ...(failedItems.length > 0 ? { failedItems } : {}),
     });
 

@@ -23,6 +23,7 @@ import { queueExpenseDeletion, queueSavingDeletion } from "@/lib/offline/syncQue
 import { useCurrency } from "@/context/CurrencyContext";
 import { SavingsDepositModal } from "@/components/savings/SavingsDepositModal";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import toast from "react-hot-toast";
 
 type FilterTab = "all" | "deposits" | "withdrawals";
@@ -36,6 +37,7 @@ export default function SavingsPage() {
   // Allow editing an expense withdrawal if needed
   const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<LocalExpense | null>(null);
+  const [savingToDelete, setSavingToDelete] = useState<LocalSaving | null>(null);
 
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -96,13 +98,18 @@ export default function SavingsPage() {
     });
   }, [savingsList, filterTab, searchTerm, tagMap]);
 
-  const handleDelete = async (item: LocalSaving) => {
-    if (confirm("Are you sure you want to delete this record?")) {
-      await queueSavingDeletion(item.clientId);
-      if (item.linkedExpenseId) {
-        await queueExpenseDeletion(item.linkedExpenseId);
-      }
+  const handleDelete = (item: LocalSaving) => {
+    setSavingToDelete(item);
+  };
+
+  const confirmDeleteSaving = async () => {
+    if (!savingToDelete) return;
+    const item = savingToDelete;
+    await queueSavingDeletion(item.clientId);
+    if (item.linkedExpenseId) {
+      await queueExpenseDeletion(item.linkedExpenseId);
     }
+    setSavingToDelete(null);
   };
 
   const handleEditRecord = (item: LocalSaving) => {
@@ -485,6 +492,17 @@ export default function SavingsPage() {
           setEditingExpense(null);
         }}
         initialExpense={editingExpense}
+      />
+
+      {/* Confirmation Modal for Deleting Saving Record */}
+      <ConfirmModal
+        isOpen={!!savingToDelete}
+        onClose={() => setSavingToDelete(null)}
+        onConfirm={confirmDeleteSaving}
+        title={savingToDelete?.type === "deposit" ? "Delete Savings Deposit?" : "Delete Savings Record?"}
+        message="Are you sure you want to delete this savings record? This will adjust your overall savings calculation."
+        confirmText="Delete Record"
+        variant="danger"
       />
     </div>
   );

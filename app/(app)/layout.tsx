@@ -8,6 +8,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { useAuth } from "@/context/AuthContext";
 import { SidebarProvider } from "@/context/SidebarContext";
+import { Loader } from "@/components/ui/Loader";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
@@ -21,11 +22,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [user, isLoading, router]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#F5F0E8] dark:bg-[#0B140F]">
-        <div className="w-10 h-10 rounded-full border-3 border-emerald-500 border-t-transparent animate-spin" />
-      </div>
-    );
+    return <Loader fullScreen message="Entering BudgetFlow..." showBrand />;
   }
 
   if (!user) {

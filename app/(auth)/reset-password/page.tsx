@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Lock, Mail, ArrowRight, CheckCircle2 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { Loader } from "@/components/ui/Loader";
 
 function ResetPasswordContent() {
   const router = useRouter();
@@ -169,9 +170,7 @@ export default function ResetPasswordPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center p-4">
-          <div className="animate-pulse text-sm text-[var(--text-muted)]">
-            Loading...
-          </div>
+          <Loader message="Loading reset portal..." />
         </div>
       }
     >

@@ -18,7 +18,7 @@ export interface LocalExpense {
   date: string; // ISO date string (YYYY-MM-DD or full ISO)
   createdAt: string;
   updatedAt: string;
-  syncStatus: "synced" | "pending" | "conflict";
+  syncStatus: "synced" | "syncing" | "pending" | "conflict";
 }
 
 export interface LocalSaving {
@@ -31,7 +31,7 @@ export interface LocalSaving {
   date: string;
   createdAt: string;
   updatedAt: string;
-  syncStatus: "synced" | "pending" | "conflict";
+  syncStatus: "synced" | "syncing" | "pending" | "conflict";
   linkedExpenseId?: string;
 }
 
@@ -75,38 +75,84 @@ export class BudgetDatabase extends Dexie {
 
 export const db = new BudgetDatabase();
 
-// Pre-seeded initial tags with curated harmonious glassmorphism colors
-export const DEFAULT_TAGS: LocalTag[] = [
-  { _id: "tag_groceries", userId: "local_user", name: "Groceries", colorKey: "#22C55E" },
-  { _id: "tag_dining", userId: "local_user", name: "Dining & Coffee", colorKey: "#F59E0B" },
-  { _id: "tag_housing", userId: "local_user", name: "Housing & Bills", colorKey: "#3B82F6" },
-  { _id: "tag_wellness", userId: "local_user", name: "Health & Gym", colorKey: "#EC4899" },
-  { _id: "tag_transport", userId: "local_user", name: "Transport", colorKey: "#14B8A6" },
-  { _id: "tag_leisure", userId: "local_user", name: "Entertainment", colorKey: "#8B5CF6" },
-];
-
-// Helper to seed initial tags if empty
-export async function seedInitialDataIfEmpty() {
+// Clean up any legacy default tags (e.g. tag_groceries) that were previously pre-seeded
+export async function cleanUpLegacyDefaultTags() {
   if (typeof window === "undefined") return;
+  try {
+    const legacyIds = new Set([
+      "tag_groceries",
+      "tag_dining",
+      "tag_housing",
+      "tag_wellness",
+      "tag_transport",
+      "tag_leisure",
+    ]);
 
-  const tagCount = await db.tags.count();
-  if (tagCount === 0) {
-    await db.tags.bulkPut(DEFAULT_TAGS);
+    const allTags = await db.tags.toArray();
+    const legacyTags = allTags.filter((t) => legacyIds.has(t._id));
+    if (legacyTags.length === 0) return;
+
+    // Build map of non-legacy tags by normalized name
+    const legitimateTagsByName = new Map<string, LocalTag>();
+    for (const t of allTags) {
+      if (!legacyIds.has(t._id)) {
+        legitimateTagsByName.set(t.name.trim().toLowerCase(), t);
+      }
+    }
+
+    const allExpenses = await db.expenses.toArray();
+    const queueItems = await db.syncQueue.toArray();
+
+    for (const lTag of legacyTags) {
+      const normName = lTag.name.trim().toLowerCase();
+      const existingReal = legitimateTagsByName.get(normName);
+
+      if (existingReal) {
+        // Remap expenses from legacy ID to the real tag's ObjectId
+        for (const exp of allExpenses) {
+          if (Array.isArray(exp.tagIds) && exp.tagIds.includes(lTag._id)) {
+            exp.tagIds = exp.tagIds.map((id) => (id === lTag._id ? existingReal._id : id));
+            await db.expenses.put(exp);
+          }
+        }
+        // Remap syncQueue items
+        for (const q of queueItems) {
+          if (q.entity === "expense" && Array.isArray(q.payload?.tagIds)) {
+            const pIds = q.payload.tagIds as string[];
+            if (pIds.includes(lTag._id)) {
+              q.payload.tagIds = pIds.map((id) => (id === lTag._id ? existingReal._id : id));
+              await db.syncQueue.put(q);
+            }
+          }
+        }
+      }
+
+      // Delete the legacy fake tag record from Dexie
+      await db.tags.delete(lTag._id);
+    }
+  } catch (err) {
+    console.error("[cleanUpLegacyDefaultTags] Error:", err);
   }
-  // Note: We DO NOT auto-seed sample expenses for general users.
-  // General users start with a clean ledger.
 }
 
-// Clear all local user expenses and syncQueue (used on logout or user switch)
+// Kept for backward compatibility: runs cleanup rather than seeding hardcoded fake tags
+export async function seedInitialDataIfEmpty() {
+  if (typeof window === "undefined") return;
+  await cleanUpLegacyDefaultTags();
+}
+
+// Clear all local user expenses, tags, savings, and syncQueue (used on logout or user switch)
 export async function clearLocalUserData() {
   if (typeof window === "undefined") return;
   try {
     await db.expenses.clear();
+    await db.tags.clear();
     await db.savings.clear();
     await db.syncQueue.clear();
   } catch (err) {
     console.error("Failed to clear local user data:", err);
   }
 }
+
 
 

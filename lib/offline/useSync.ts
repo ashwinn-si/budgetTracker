@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, seedInitialDataIfEmpty } from "./db";
+import { db, cleanUpLegacyDefaultTags } from "./db";
 import { flushSyncQueue, pullFromServer } from "./syncQueue";
 
 export type SyncState = "synced" | "syncing" | "pending" | "offline";
@@ -64,8 +64,8 @@ export function useSync({ accessToken }: UseSyncOptions = {}) {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Initial seed + sync on mount
-    seedInitialDataIfEmpty().then(() => {
+    // Clean up any legacy default tags + sync on mount
+    cleanUpLegacyDefaultTags().then(() => {
       triggerSync();
     });
 

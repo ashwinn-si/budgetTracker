@@ -62,6 +62,7 @@ export function ExpenseFormModal({
   // Search or quick-create category query
   const [tagSearchQuery, setTagSearchQuery] = useState<string>("");
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [isQuickCreatingTag, setIsQuickCreatingTag] = useState<boolean>(false);
   const [fromSavings, setFromSavings] = useState<boolean>(false);
   const [linkedSaving, setLinkedSaving] = useState<LocalSaving | null>(null);
 
@@ -196,6 +197,7 @@ export function ExpenseFormModal({
 
   // Quick create category on the fly without confusing color subforms
   const handleQuickCreateTag = async (nameToCreate?: string) => {
+    if (isQuickCreatingTag) return;
     const name = (nameToCreate || tagSearchQuery).trim();
     if (!name) return;
 
@@ -209,22 +211,29 @@ export function ExpenseFormModal({
       return;
     }
 
-    const randomColor = PRESET_TAG_COLORS[Math.floor(Math.random() * PRESET_TAG_COLORS.length)];
-    const tagId = `tag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-    const newTag: LocalTag = {
-      _id: tagId,
-      userId,
-      name,
-      colorKey: randomColor,
-    };
+    setIsQuickCreatingTag(true);
+    try {
+      const randomColor = PRESET_TAG_COLORS[Math.floor(Math.random() * PRESET_TAG_COLORS.length)];
+      const tagId = `tag_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const newTag: LocalTag = {
+        _id: tagId,
+        userId,
+        name,
+        colorKey: randomColor,
+      };
 
-    await queueTagCreation(newTag);
-    setSelectedTagIds((prev) => [...prev, tagId]);
-    setTagSearchQuery("");
+      await queueTagCreation(newTag);
+      setSelectedTagIds((prev) => [...prev, tagId]);
+      setTagSearchQuery("");
+    } finally {
+      setIsQuickCreatingTag(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const parsedAmount = parseAmountInput(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       toast.error("Please enter a valid amount greater than 0");

@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, LocalTag } from "@/lib/offline/db";
-import { queueTagCreation, queueTagDeletion } from "@/lib/offline/syncQueue";
+import { queueTagCreation, queueTagDeletion, deduplicateLocalTags } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { Button } from "@/components/ui/Button";
 import { GlassCard } from "@/components/ui/GlassCard";
 
@@ -40,9 +41,16 @@ export default function TagsPage() {
   const { formatAmount } = useCurrency();
 
   const [isCreating, setIsCreating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const [error, setError] = useState<string | null>(null);
+  const [tagToDelete, setTagToDelete] = useState<{ id: string; name: string } | null>(null);
+
+  // Run local tag deduplication immediately on mount
+  useEffect(() => {
+    deduplicateLocalTags();
+  }, []);
 
   // Live query from local Dexie database
   const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
@@ -83,6 +91,8 @@ export default function TagsPage() {
 
   const handleCreateTag = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (isSaving) return;
+
     const trimmed = newTagName.trim();
     if (!trimmed) {
       setError("Please enter a category name.");
@@ -97,6 +107,8 @@ export default function TagsPage() {
       return;
     }
 
+    setIsSaving(true);
+    setError(null);
     try {
       const newTag: LocalTag = {
         _id: `tag_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -112,21 +124,13 @@ export default function TagsPage() {
     } catch (err) {
       console.error("Failed to create tag:", err);
       setError("Could not save category. Please try again.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleDeleteTag = async (tagId: string, name: string) => {
-    if (
-      confirm(
-        `Are you sure you want to delete "${name}"? This will untag associated expenses.`
-      )
-    ) {
-      try {
-        await queueTagDeletion(tagId);
-      } catch (err) {
-        console.error("Failed to delete tag:", err);
-      }
-    }
+  const handleDeleteTag = (tagId: string, name: string) => {
+    setTagToDelete({ id: tagId, name });
   };
 
   return (
@@ -396,6 +400,21 @@ export default function TagsPage() {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for Deleting Tag */}
+      <ConfirmModal
+        isOpen={!!tagToDelete}
+        onClose={() => setTagToDelete(null)}
+        onConfirm={async () => {
+          if (tagToDelete) {
+            await queueTagDeletion(tagToDelete.id);
+          }
+        }}
+        title={`Delete "${tagToDelete?.name}"?`}
+        message={`Are you sure you want to delete "${tagToDelete?.name}"? This will untag associated expenses.`}
+        confirmText="Delete Category"
+        variant="danger"
+      />
     </div>
   );
 }

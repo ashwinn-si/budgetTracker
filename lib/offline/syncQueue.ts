@@ -1,6 +1,4 @@
-"use client";
-
-import { db, LocalExpense, LocalTag, LocalSaving, SyncQueueItem } from "./db";
+import { db, cleanUpLegacyDefaultTags, LocalExpense, LocalTag, LocalSaving, SyncQueueItem } from "./db";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -34,99 +32,309 @@ function getStoredAccessToken(): string | null {
   }
 }
 
+/**
+ * Attempt to refresh the access token silently if an API call returns 401.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/auth/refresh", { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.accessToken) {
+        if (typeof window !== "undefined") {
+          try {
+            sessionStorage.setItem("budget_access_token", data.accessToken);
+          } catch {}
+        }
+        return data.accessToken;
+      }
+    }
+  } catch (err) {
+    console.error("[auth] Failed to refresh token:", err);
+  }
+  return null;
+}
+
+/**
+ * Reconcile server-resolved tag IDs into Dexie immediately.
+ */
+export async function reconcileTagMap(tagMap: Record<string, string>): Promise<void> {
+  for (const [localId, serverId] of Object.entries(tagMap)) {
+    if (!localId || !serverId || localId === serverId) continue;
+
+    // Replace local tag with serverId in db.tags
+    const localTag = await db.tags.get(localId);
+    if (localTag) {
+      await db.tags.delete(localId);
+      await db.tags.put({ ...localTag, _id: serverId });
+    }
+
+    // Re-point all expenses using localId to serverId
+    const allExpenses = await db.expenses.toArray();
+    for (const exp of allExpenses) {
+      if (Array.isArray(exp.tagIds) && exp.tagIds.includes(localId)) {
+        exp.tagIds = exp.tagIds.map((id) => (id === localId ? serverId : id));
+        await db.expenses.put(exp);
+      }
+    }
+
+    // Re-point any remaining pending items in syncQueue
+    const queuePending = await db.syncQueue.toArray();
+    for (const q of queuePending) {
+      if (q.entity === "expense" && Array.isArray(q.payload?.tagIds)) {
+        const pIds = q.payload.tagIds as string[];
+        if (pIds.includes(localId)) {
+          q.payload.tagIds = pIds.map((id) => (id === localId ? serverId : id));
+          await db.syncQueue.put(q);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Direct sync execution when the client is online.
+ * Directly sends the item to the server and returns true on success.
+ * Only if this returns false will the caller queue the item in db.syncQueue.
+ */
+export async function executeDirectSync(item: SyncQueueItem): Promise<boolean> {
+  if (typeof window === "undefined" || !navigator.onLine) {
+    return false;
+  }
+
+  try {
+    let token = getStoredAccessToken();
+    let res = await fetch("/api/expenses/sync", {
+      method: "POST",
+      headers: buildAuthHeaders(token),
+      body: JSON.stringify({ items: [item] }),
+    });
+
+    if (res.status === 401) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        token = refreshedToken;
+        res = await fetch("/api/expenses/sync", {
+          method: "POST",
+          headers: buildAuthHeaders(token),
+          body: JSON.stringify({ items: [item] }),
+        });
+      }
+    }
+
+    if (!res.ok) {
+      return false;
+    }
+
+    const data = await res.json();
+
+    if (Array.isArray(data.failedItems) && data.failedItems.length > 0) {
+      console.warn("[directSync] Item failed on server:", data.failedItems);
+      return false;
+    }
+
+    if (data.tagMap && typeof data.tagMap === "object") {
+      await reconcileTagMap(data.tagMap as Record<string, string>);
+    }
+
+    // Mark as synced in Dexie
+    if (item.entity === "expense" && item.action !== "delete") {
+      await db.expenses.update(item.clientId, { syncStatus: "synced" });
+    } else if (item.entity === "saving" && item.action !== "delete") {
+      await db.savings.update(item.clientId, { syncStatus: "synced" });
+    }
+
+    return true;
+  } catch (err) {
+    console.warn("[directSync] Network error during direct sync, will queue:", err);
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Queue helpers
+// Optimistic Sync & Queue helpers:
+// If online, perform direct API call immediately.
+// If offline (or if network call fails), enqueue into db.syncQueue.
 // ---------------------------------------------------------------------------
 
 export async function queueExpenseCreation(expense: LocalExpense) {
-  await db.expenses.put(expense);
-  await db.syncQueue.add({
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  const initialStatus = isOnline ? ("syncing" as const) : ("pending" as const);
+  const localExp: LocalExpense = { ...expense, syncStatus: initialStatus };
+  await db.expenses.put(localExp);
+
+  const item: SyncQueueItem = {
     clientId: expense.clientId,
     action: "create",
     entity: "expense",
-    payload: { ...expense },
+    payload: { ...localExp },
     createdAt: Date.now(),
-  });
+  };
+
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+    await db.expenses.update(expense.clientId, { syncStatus: "pending" });
+  }
 }
 
 export async function queueExpenseUpdate(expense: LocalExpense) {
-  const updated = { ...expense, syncStatus: "pending" as const, updatedAt: new Date().toISOString() };
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  const initialStatus = isOnline ? ("syncing" as const) : ("pending" as const);
+  const updated: LocalExpense = { ...expense, syncStatus: initialStatus, updatedAt: new Date().toISOString() };
   await db.expenses.put(updated);
-  await db.syncQueue.add({
+
+  const item: SyncQueueItem = {
     clientId: expense.clientId,
     action: "update",
     entity: "expense",
     payload: { ...updated },
     createdAt: Date.now(),
-  });
+  };
+
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+    await db.expenses.update(expense.clientId, { syncStatus: "pending" });
+  }
 }
 
 export async function queueExpenseDeletion(clientId: string) {
   await db.expenses.delete(clientId);
-  await db.syncQueue.add({
+
+  const item: SyncQueueItem = {
     clientId,
     action: "delete",
     entity: "expense",
     payload: { clientId },
     createdAt: Date.now(),
-  });
+  };
+
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+  }
 }
 
 export async function queueSavingCreation(saving: LocalSaving) {
-  await db.savings.put(saving);
-  await db.syncQueue.add({
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  const initialStatus = isOnline ? ("syncing" as const) : ("pending" as const);
+  const localSaving: LocalSaving = { ...saving, syncStatus: initialStatus };
+  await db.savings.put(localSaving);
+
+  const item: SyncQueueItem = {
     clientId: saving.clientId,
     action: "create",
     entity: "saving",
-    payload: { ...saving },
+    payload: { ...localSaving },
     createdAt: Date.now(),
-  });
+  };
+
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+    await db.savings.update(saving.clientId, { syncStatus: "pending" });
+  }
 }
 
 export async function queueSavingUpdate(saving: LocalSaving) {
-  const updated = { ...saving, syncStatus: "pending" as const, updatedAt: new Date().toISOString() };
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  const initialStatus = isOnline ? ("syncing" as const) : ("pending" as const);
+  const updated: LocalSaving = { ...saving, syncStatus: initialStatus, updatedAt: new Date().toISOString() };
   await db.savings.put(updated);
-  await db.syncQueue.add({
+
+  const item: SyncQueueItem = {
     clientId: saving.clientId,
     action: "update",
     entity: "saving",
     payload: { ...updated },
     createdAt: Date.now(),
-  });
+  };
+
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+    await db.savings.update(saving.clientId, { syncStatus: "pending" });
+  }
 }
 
 export async function queueSavingDeletion(clientId: string) {
   await db.savings.delete(clientId);
-  await db.syncQueue.add({
+
+  const item: SyncQueueItem = {
     clientId,
     action: "delete",
     entity: "saving",
     payload: { clientId },
     createdAt: Date.now(),
-  });
+  };
+
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+  }
 }
 
 export async function queueTagCreation(tag: LocalTag) {
   await db.tags.put(tag);
-  await db.syncQueue.add({
+
+  const item: SyncQueueItem = {
     clientId: tag._id,
     action: "create",
     entity: "tag",
     payload: { ...tag },
     createdAt: Date.now(),
-  });
+  };
+
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+  }
 }
 
 export async function queueTagDeletion(tagId: string) {
-  // Read the tag BEFORE deleting it locally so we can include its name in the
-  // sync payload. The server's delete handler uses payload.name for a safe
-  // name-based lookup — payload.tagId alone is not enough because local IDs
-  // are not valid MongoDB ObjectIds and cannot be used as _id on the server.
   const tag = await db.tags.get(tagId);
   const tagName = tag?.name ?? "";
 
   await db.tags.delete(tagId);
-  // Also remove tagId from local expenses that reference it
   const expenses = await db.expenses.toArray();
   for (const exp of expenses) {
     if (exp.tagIds && exp.tagIds.includes(tagId)) {
@@ -134,15 +342,99 @@ export async function queueTagDeletion(tagId: string) {
       await db.expenses.put(exp);
     }
   }
-  await db.syncQueue.add({
+
+  const item: SyncQueueItem = {
     clientId: tagId,
     action: "delete",
     entity: "tag",
-    // Include name so the server can resolve the tag even when clientId is
-    // a local-style ID (not a MongoDB ObjectId).
     payload: { tagId, name: tagName },
     createdAt: Date.now(),
-  });
+  };
+
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Deduplication helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Scan Dexie's local tags table and deduplicate any tags that share the same
+ * name (case-insensitive). Keeps the server-synced tag (valid 24-char ObjectId)
+ * or the first created tag, updates all local expenses and pending sync queue
+ * items to reference the canonical ID, and removes duplicate tag records.
+ */
+export async function deduplicateLocalTags(): Promise<void> {
+  if (typeof window === "undefined") return;
+  try {
+    await cleanUpLegacyDefaultTags();
+    const allTags = await db.tags.toArray();
+    if (allTags.length <= 1) return;
+
+    // Group by trimmed, lowercase name
+    const byName = new Map<string, LocalTag[]>();
+    for (const tag of allTags) {
+      const key = (tag.name || "").trim().toLowerCase();
+      if (!key) continue;
+      if (!byName.has(key)) byName.set(key, []);
+      byName.get(key)!.push(tag);
+    }
+
+    for (const [, tagList] of byName) {
+      if (tagList.length <= 1) continue;
+
+      // Prefer a real MongoDB ObjectId (24 hex characters), otherwise pick the first
+      let canonical = tagList.find((t) => /^[a-f\d]{24}$/i.test(t._id));
+      if (!canonical) canonical = tagList[0];
+
+      const duplicateIds = new Set(
+        tagList.filter((t) => t._id !== canonical!._id).map((t) => t._id)
+      );
+
+      if (duplicateIds.size === 0) continue;
+
+      // Re-point all expenses in Dexie to canonical._id
+      const allExpenses = await db.expenses.toArray();
+      for (const exp of allExpenses) {
+        if (Array.isArray(exp.tagIds) && exp.tagIds.some((id) => duplicateIds.has(id))) {
+          exp.tagIds = Array.from(
+            new Set(exp.tagIds.map((id) => (duplicateIds.has(id) ? canonical!._id : id)))
+          );
+          await db.expenses.put(exp);
+        }
+      }
+
+      // Re-point pending items in syncQueue
+      const queueItems = await db.syncQueue.toArray();
+      for (const q of queueItems) {
+        if (q.entity === "expense" && Array.isArray(q.payload?.tagIds)) {
+          const pIds = q.payload.tagIds as string[];
+          if (pIds.some((id) => duplicateIds.has(id))) {
+            q.payload.tagIds = Array.from(
+              new Set(pIds.map((id) => (duplicateIds.has(id) ? canonical!._id : id)))
+            );
+            await db.syncQueue.put(q);
+          }
+        }
+      }
+
+      // Remove the duplicate tag records from Dexie
+      for (const dupId of duplicateIds) {
+        await db.tags.delete(dupId);
+      }
+    }
+  } catch (err) {
+    console.error("[syncQueue] Error in deduplicateLocalTags:", err);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -169,20 +461,34 @@ export async function flushSyncQueue(
   }
 
   // Resolve access token: prefer explicit param, fall back to sessionStorage
-  const token = accessToken ?? getStoredAccessToken();
+  let token = accessToken ?? getStoredAccessToken();
 
   isFlushing = true;
   try {
+    await deduplicateLocalTags();
+
     const queueItems = await db.syncQueue.toArray();
     if (queueItems.length === 0) {
       return { success: true, syncedCount: 0 };
     }
 
-    const res = await fetch("/api/expenses/sync", {
+    let res = await fetch("/api/expenses/sync", {
       method: "POST",
       headers: buildAuthHeaders(token),
       body: JSON.stringify({ items: queueItems }),
     });
+
+    if (res.status === 401) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        token = refreshedToken;
+        res = await fetch("/api/expenses/sync", {
+          method: "POST",
+          headers: buildAuthHeaders(token),
+          body: JSON.stringify({ items: queueItems }),
+        });
+      }
+    }
 
     if (res.status === 503) {
       // DB temporarily unavailable — keep items in queue, retry later
@@ -190,7 +496,7 @@ export async function flushSyncQueue(
     }
 
     if (res.status === 401) {
-      // Not authenticated — token may have expired; caller should refresh first
+      // Not authenticated — token may have expired and refresh failed
       return { success: false, syncedCount: 0, error: "Unauthorized — token expired" };
     }
 
@@ -200,22 +506,21 @@ export async function flushSyncQueue(
 
     const data = await res.json();
 
+    // Reconcile server-resolved tag IDs into Dexie immediately
+    if (data.tagMap && typeof data.tagMap === "object") {
+      await reconcileTagMap(data.tagMap as Record<string, string>);
+    }
+
     // Build a set of clientIds that the server explicitly reported as failed.
-    // These items stay in the Dexie queue for a future retry rather than
-    // being silently dropped as if they had succeeded.
     const failedClientIds = new Set<string>(
       Array.isArray(data.failedItems)
         ? data.failedItems.map((f: { clientId: string }) => f.clientId)
         : []
     );
 
-    // Mark successfully processed items as synced and remove them from the queue.
-    // Items in failedClientIds are intentionally left untouched.
     let syncedCount = 0;
     for (const item of queueItems) {
       if (failedClientIds.has(item.clientId)) {
-        // Server returned this item as failed — leave it in the queue
-        // so it will be retried on the next sync trigger.
         continue;
       }
 
@@ -268,26 +573,93 @@ export async function pullFromServer(
   }
 
   // Resolve access token: prefer explicit param, fall back to sessionStorage
-  const token = accessToken ?? getStoredAccessToken();
-  const headers = buildAuthHeaders(token);
+  let currentToken = accessToken ?? getStoredAccessToken();
+  let headers = buildAuthHeaders(currentToken);
 
   try {
-    // 1. Pull tags
-    const tagsRes = await fetch("/api/tags", { headers });
+    await deduplicateLocalTags();
+
+    // 1. Pull tags with reconciliation
+    let tagsRes = await fetch("/api/tags", { headers });
+    if (tagsRes.status === 401) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        currentToken = refreshedToken;
+        headers = buildAuthHeaders(currentToken);
+        tagsRes = await fetch("/api/tags", { headers });
+      }
+    }
     if (tagsRes.ok) {
       const tagsData = await tagsRes.json();
-      if (Array.isArray(tagsData.tags) && tagsData.tags.length > 0) {
-        const localTags: LocalTag[] = tagsData.tags.map((t: Record<string, unknown>) => ({
+      if (Array.isArray(tagsData.tags)) {
+        const existingLocalTags = await db.tags.toArray();
+        const serverTags = tagsData.tags;
+
+        for (const sTag of serverTags) {
+          const sId = (sTag._id as { toString(): string })?.toString() ?? String(sTag._id);
+          const sName = (sTag.name as string || "").trim().toLowerCase();
+          const sClientId = sTag.clientId as string | undefined;
+
+          // Check if an existing local tag has a different _id but matches by name or clientId
+          const matchingLocal = existingLocalTags.find(
+            (lt) => lt._id !== sId && (
+              (lt.name && lt.name.trim().toLowerCase() === sName) ||
+              (sClientId && lt._id === sClientId)
+            )
+          );
+
+          if (matchingLocal) {
+            const oldId = matchingLocal._id;
+            // Update local expenses referencing oldId to sId
+            const allExpenses = await db.expenses.toArray();
+            for (const exp of allExpenses) {
+              if (Array.isArray(exp.tagIds) && exp.tagIds.includes(oldId)) {
+                exp.tagIds = exp.tagIds.map((id) => (id === oldId ? sId : id));
+                await db.expenses.put(exp);
+              }
+            }
+            // Update syncQueue
+            const queueItems = await db.syncQueue.toArray();
+            for (const q of queueItems) {
+              if (q.entity === "expense" && Array.isArray(q.payload?.tagIds)) {
+                const pIds = q.payload.tagIds as string[];
+                if (pIds.includes(oldId)) {
+                  q.payload.tagIds = pIds.map((id) => (id === oldId ? sId : id));
+                  await db.syncQueue.put(q);
+                }
+              }
+            }
+            // Delete old duplicate local tag
+            await db.tags.delete(oldId);
+          }
+        }
+
+        const localTags: LocalTag[] = serverTags.map((t: Record<string, unknown>) => ({
           _id: (t._id as { toString(): string })?.toString() ?? String(t._id),
           userId: (t.userId as string) || "local_user",
           name: t.name as string,
           colorKey: (t.colorKey as string) || "#22C55E",
         }));
         await db.tags.bulkPut(localTags);
+
+        // Remove local tags that no longer exist on server and aren't pending creation
+        const pendingTagItems = await db.syncQueue.where("entity").equals("tag").toArray();
+        const pendingTagIds = new Set(pendingTagItems.map((p) => p.clientId));
+        const serverTagIdSet = new Set(
+          serverTags.map((t: Record<string, unknown>) =>
+            (t._id as { toString(): string })?.toString() ?? String(t._id)
+          )
+        );
+        const currentLocalTags = await db.tags.toArray();
+        for (const lt of currentLocalTags) {
+          if (!serverTagIdSet.has(lt._id) && !pendingTagIds.has(lt._id)) {
+            await db.tags.delete(lt._id);
+          }
+        }
       }
     }
 
-    // 2. Pull expenses
+    // 2. Pull expenses with deduplication and ObjectId preservation
     const expRes = await fetch("/api/expenses", { headers });
     if (expRes.ok) {
       const expData = await expRes.json();
@@ -299,10 +671,19 @@ export async function pullFromServer(
         for (const sExp of expData.expenses) {
           const clientId =
             sExp.clientId || (sExp._id as { toString(): string })?.toString();
+          const serverId =
+            (sExp._id as { toString(): string })?.toString() ?? String(sExp._id);
           serverClientIds.add(clientId);
 
           if (!pendingClientIds.has(clientId)) {
+            // Deduplicate if an existing record in Dexie has matching _id under a different clientId
+            const existingByServerId = await db.expenses.where("_id").equals(serverId).first();
+            if (existingByServerId && existingByServerId.clientId !== clientId) {
+              await db.expenses.delete(existingByServerId.clientId);
+            }
+
             const localExp: LocalExpense = {
+              _id: serverId,
               clientId,
               userId: sExp.userId,
               amount: Number(sExp.amount) || 0,
@@ -343,7 +724,7 @@ export async function pullFromServer(
       }
     }
 
-    // 3. Pull savings
+    // 3. Pull savings with deduplication
     const savRes = await fetch("/api/savings", { headers });
     if (savRes.ok) {
       const savData = await savRes.json();
@@ -355,10 +736,19 @@ export async function pullFromServer(
         for (const sSav of savData.savings) {
           const clientId =
             sSav.clientId || (sSav._id as { toString(): string })?.toString();
+          const serverId =
+            (sSav._id as { toString(): string })?.toString() ?? String(sSav._id);
           serverSavIds.add(clientId);
 
           if (!pendingClientIds.has(clientId)) {
+            // Deduplicate if an existing record in Dexie has matching _id under a different clientId
+            const existingByServerId = await db.savings.where("_id").equals(serverId).first();
+            if (existingByServerId && existingByServerId.clientId !== clientId) {
+              await db.savings.delete(existingByServerId.clientId);
+            }
+
             const localSav: LocalSaving = {
+              _id: serverId,
               clientId,
               userId: sSav.userId,
               amount: Number(sSav.amount) || 0,
@@ -393,6 +783,7 @@ export async function pullFromServer(
       }
     }
 
+    await deduplicateLocalTags();
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Pull error";

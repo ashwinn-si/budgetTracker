@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
+import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
@@ -137,12 +138,9 @@ export default function ProfilePage() {
   };
 
   const [isClearingDb, setIsClearingDb] = useState(false);
+  const [isClearDbModalOpen, setIsClearDbModalOpen] = useState(false);
 
-  const handleClearDatabase = async () => {
-    const confirmed = window.confirm(
-      "Are you sure you want to clear all expenses and savings records from both the database and this device? Categories and your user account will be preserved."
-    );
-    if (!confirmed) return;
+  const confirmClearDatabase = async () => {
 
     setIsClearingDb(true);
     try {
@@ -694,7 +692,7 @@ export default function ProfilePage() {
               <Button
                 variant="danger"
                 size="sm"
-                onClick={handleClearDatabase}
+                onClick={() => setIsClearDbModalOpen(true)}
                 isLoading={isClearingDb}
                 className="w-full sm:w-auto"
               >
@@ -720,6 +718,18 @@ export default function ProfilePage() {
           </a>
         </div>
       </div>
+
+      {/* Confirmation Modal for Clearing Database */}
+      <ConfirmModal
+        isOpen={isClearDbModalOpen}
+        onClose={() => setIsClearDbModalOpen(false)}
+        onConfirm={confirmClearDatabase}
+        isLoading={isClearingDb}
+        title="Reset All Transactions?"
+        message="Are you sure you want to clear all expenses and savings records from both the database and this device? Categories and your account will be preserved."
+        confirmText="Clear Everything"
+        variant="danger"
+      />
     </div>
   );
 }

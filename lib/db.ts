@@ -24,14 +24,20 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
     return null;
   }
 
-  if (cached!.conn) {
+  // If connection exists and is ready, reuse it
+  if (cached!.conn && cached!.conn.connection.readyState === 1) {
     return cached!.conn;
   }
 
-  if (!cached!.promise) {
+  // If connection is not active or readyState is disconnected (0), reset and reconnect
+  if (!cached!.promise || (cached!.conn && cached!.conn.connection.readyState !== 1)) {
+    cached!.conn = null;
     const opts: mongoose.ConnectOptions = {
       bufferCommands: false,
       maxPoolSize: 10,
+      serverSelectionTimeoutMS: 8000,
+      connectTimeoutMS: 10000,
+      socketTimeoutMS: 20000,
     };
 
     cached!.promise = mongoose.connect(MONGODB_URI, opts).then((m) => {
@@ -43,6 +49,7 @@ export async function connectToDatabase(): Promise<typeof mongoose | null> {
     cached!.conn = await cached!.promise;
   } catch (e) {
     cached!.promise = null;
+    cached!.conn = null;
     console.error("MongoDB connection error:", e);
     // Return null instead of throwing so callers' `if (!db)` guard fires
     // correctly — throwing here caused routes to return 500 instead of
