@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
+import { DeleteLog } from "@/models/DeleteLog";
 import { getCurrentUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
@@ -144,7 +145,25 @@ export async function DELETE(req: NextRequest) {
     }
 
     const filter = id ? { _id: id, userId } : { clientId, userId };
-    await Expense.deleteOne(filter);
+    const existing = await Expense.findOne(filter);
+    if (existing) {
+      await DeleteLog.findOneAndUpdate(
+        { userId, entityId: existing.clientId || existing._id.toString() },
+        {
+          $set: {
+            userId,
+            entityType: "expense",
+            entityId: existing.clientId || existing._id.toString(),
+            title: existing.note || `Expense: ${existing.amount}`,
+            details: `${existing.amount} • ${new Date(existing.date).toLocaleDateString()}`,
+            data: existing.toObject(),
+            deletedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+      await Expense.deleteOne({ _id: existing._id });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

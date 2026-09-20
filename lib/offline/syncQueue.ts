@@ -1,4 +1,4 @@
-import { db, cleanUpLegacyDefaultTags, LocalExpense, LocalTag, LocalSaving, SyncQueueItem } from "./db";
+import { db, cleanUpLegacyDefaultTags, LocalExpense, LocalTag, LocalSaving, SyncQueueItem, LocalDeleteLog } from "./db";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -210,13 +210,31 @@ export async function queueExpenseUpdate(expense: LocalExpense) {
 }
 
 export async function queueExpenseDeletion(clientId: string) {
+  // 1. Capture snapshot for DeleteLog (Recycle Bin) before deletion
+  const exp = await db.expenses.get(clientId);
+  if (exp) {
+    const logId = `del_exp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const deleteLogItem: LocalDeleteLog = {
+      id: logId,
+      userId: exp.userId,
+      entityType: "expense",
+      entityId: clientId,
+      title: exp.note || `Expense: ${exp.amount}`,
+      details: `${exp.amount} • ${exp.date ? exp.date.split("T")[0] : "Recent"}`,
+      data: { ...exp },
+      deletedAt: new Date().toISOString(),
+      syncStatus: "pending",
+    };
+    await db.deleteLogs.put(deleteLogItem);
+  }
+
   await db.expenses.delete(clientId);
 
   const item: SyncQueueItem = {
     clientId,
     action: "delete",
     entity: "expense",
-    payload: { clientId },
+    payload: { clientId, ...(exp ? { deleteSnapshot: { ...exp } } : {}) },
     createdAt: Date.now(),
   };
 
@@ -285,13 +303,30 @@ export async function queueSavingUpdate(saving: LocalSaving) {
 }
 
 export async function queueSavingDeletion(clientId: string) {
+  const saving = await db.savings.get(clientId);
+  if (saving) {
+    const logId = `del_sav_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const deleteLogItem: LocalDeleteLog = {
+      id: logId,
+      userId: saving.userId,
+      entityType: "saving",
+      entityId: clientId,
+      title: saving.note || `${saving.type === "deposit" ? "Deposit" : "Withdrawal"}: ${saving.amount}`,
+      details: `${saving.type === "deposit" ? "Deposit" : "Withdrawal"} • ${saving.amount} • ${saving.date ? saving.date.split("T")[0] : "Recent"}`,
+      data: { ...saving },
+      deletedAt: new Date().toISOString(),
+      syncStatus: "pending",
+    };
+    await db.deleteLogs.put(deleteLogItem);
+  }
+
   await db.savings.delete(clientId);
 
   const item: SyncQueueItem = {
     clientId,
     action: "delete",
     entity: "saving",
-    payload: { clientId },
+    payload: { clientId, ...(saving ? { deleteSnapshot: { ...saving } } : {}) },
     createdAt: Date.now(),
   };
 
@@ -334,9 +369,29 @@ export async function queueTagDeletion(tagId: string) {
   const tag = await db.tags.get(tagId);
   const tagName = tag?.name ?? "";
 
+  const allExpenses = await db.expenses.toArray();
+  const affectedExpenseClientIds = allExpenses
+    .filter((exp) => Array.isArray(exp.tagIds) && exp.tagIds.includes(tagId))
+    .map((exp) => exp.clientId);
+
+  if (tag) {
+    const logId = `del_tag_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const deleteLogItem: LocalDeleteLog = {
+      id: logId,
+      userId: tag.userId,
+      entityType: "tag",
+      entityId: tagId,
+      title: tag.name,
+      details: `Category • ${tag.colorKey}`,
+      data: { ...tag, affectedExpenseClientIds },
+      deletedAt: new Date().toISOString(),
+      syncStatus: "pending",
+    };
+    await db.deleteLogs.put(deleteLogItem);
+  }
+
   await db.tags.delete(tagId);
-  const expenses = await db.expenses.toArray();
-  for (const exp of expenses) {
+  for (const exp of allExpenses) {
     if (exp.tagIds && exp.tagIds.includes(tagId)) {
       exp.tagIds = exp.tagIds.filter((id) => id !== tagId);
       await db.expenses.put(exp);
@@ -347,7 +402,11 @@ export async function queueTagDeletion(tagId: string) {
     clientId: tagId,
     action: "delete",
     entity: "tag",
-    payload: { tagId, name: tagName },
+    payload: {
+      tagId,
+      name: tagName,
+      ...(tag ? { deleteSnapshot: { ...tag, affectedExpenseIds: affectedExpenseClientIds } } : {}),
+    },
     createdAt: Date.now(),
   };
 
@@ -360,6 +419,129 @@ export async function queueTagDeletion(tagId: string) {
   const ok = await executeDirectSync(item);
   if (!ok) {
     await db.syncQueue.add(item);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Recovery & Delete Logs Helpers
+// ---------------------------------------------------------------------------
+
+export async function recoverDeletedItem(logId: string): Promise<{ success: boolean; entityType?: string; error?: string }> {
+  try {
+    const log = (await db.deleteLogs.get(logId)) || (await db.deleteLogs.where("entityId").equals(logId).first());
+    if (!log) {
+      // Try direct server recovery
+      const token = getStoredAccessToken();
+      const res = await fetch("/api/delete-logs/recover", {
+        method: "POST",
+        headers: buildAuthHeaders(token),
+        body: JSON.stringify({ logId }),
+      });
+      if (res.ok) {
+        await pullFromServer();
+        return { success: true };
+      }
+      return { success: false, error: "Record not found in recycle bin" };
+    }
+
+    const { entityType, data, entityId } = log;
+
+    if (entityType === "expense") {
+      const exp = data as unknown as LocalExpense;
+      const restoredExp: LocalExpense = {
+        ...exp,
+        clientId: exp.clientId || entityId,
+        syncStatus: "pending",
+        updatedAt: new Date().toISOString(),
+      };
+      await queueExpenseCreation(restoredExp);
+    } else if (entityType === "saving") {
+      const sav = data as unknown as LocalSaving;
+      const restoredSav: LocalSaving = {
+        ...sav,
+        clientId: sav.clientId || entityId,
+        syncStatus: "pending",
+        updatedAt: new Date().toISOString(),
+      };
+      await queueSavingCreation(restoredSav);
+    } else if (entityType === "tag") {
+      const tag = data as unknown as LocalTag;
+      const restoredTag: LocalTag = {
+        ...tag,
+        _id: tag._id || entityId,
+      };
+      await queueTagCreation(restoredTag);
+
+      // Reattach tag to affected expenses
+      const affected = (data.affectedExpenseClientIds || data.affectedExpenseIds) as string[] | undefined;
+      if (Array.isArray(affected) && affected.length > 0) {
+        for (const cId of affected) {
+          const exp = await db.expenses.get(cId);
+          if (exp) {
+            const currentTagIds = Array.isArray(exp.tagIds) ? exp.tagIds : [];
+            if (!currentTagIds.includes(restoredTag._id)) {
+              exp.tagIds = [...currentTagIds, restoredTag._id];
+              await queueExpenseUpdate(exp);
+            }
+          }
+        }
+      }
+    }
+
+    // Remove from Dexie deleteLogs
+    await db.deleteLogs.delete(log.id);
+
+    // Notify server recovery endpoint
+    try {
+      const token = getStoredAccessToken();
+      await fetch("/api/delete-logs/recover", {
+        method: "POST",
+        headers: buildAuthHeaders(token),
+        body: JSON.stringify({ logId: log._id || log.id, entityId: log.entityId }),
+      });
+    } catch (netErr) {
+      console.warn("[recoverDeletedItem] Offline server notify error:", netErr);
+    }
+
+    return { success: true, entityType };
+  } catch (err: unknown) {
+    console.error("[recoverDeletedItem] Error:", err);
+    return { success: false, error: err instanceof Error ? err.message : "Recovery failed" };
+  }
+}
+
+export async function permanentDeleteLog(logId: string): Promise<boolean> {
+  try {
+    const log = (await db.deleteLogs.get(logId)) || (await db.deleteLogs.where("entityId").equals(logId).first());
+    const targetId = log?._id || log?.entityId || logId;
+    if (log) {
+      await db.deleteLogs.delete(log.id);
+    }
+
+    const token = getStoredAccessToken();
+    await fetch(`/api/delete-logs?id=${encodeURIComponent(targetId)}`, {
+      method: "DELETE",
+      headers: buildAuthHeaders(token),
+    });
+    return true;
+  } catch (err) {
+    console.error("[permanentDeleteLog] Error:", err);
+    return false;
+  }
+}
+
+export async function clearAllDeleteLogs(): Promise<boolean> {
+  try {
+    await db.deleteLogs.clear();
+    const token = getStoredAccessToken();
+    await fetch("/api/delete-logs?all=true", {
+      method: "DELETE",
+      headers: buildAuthHeaders(token),
+    });
+    return true;
+  } catch (err) {
+    console.error("[clearAllDeleteLogs] Error:", err);
+    return false;
   }
 }
 
@@ -781,6 +963,34 @@ export async function pullFromServer(
           }
         }
       }
+    }
+
+    // 4. Pull delete logs from server
+    try {
+      const delLogsRes = await fetch("/api/delete-logs", { headers });
+      if (delLogsRes.ok) {
+        const delData = await delLogsRes.json();
+        if (Array.isArray(delData.deleteLogs)) {
+          for (const sLog of delData.deleteLogs) {
+            const logId = sLog._id || sLog.entityId || `del_${sLog.deletedAt}`;
+            const localLog: LocalDeleteLog = {
+              id: logId,
+              _id: sLog._id,
+              userId: sLog.userId,
+              entityType: sLog.entityType,
+              entityId: sLog.entityId,
+              title: sLog.title,
+              details: sLog.details || "",
+              data: sLog.data || {},
+              deletedAt: typeof sLog.deletedAt === "string" ? sLog.deletedAt : new Date(sLog.deletedAt).toISOString(),
+              syncStatus: "synced",
+            };
+            await db.deleteLogs.put(localLog);
+          }
+        }
+      }
+    } catch {
+      // Non-critical offline fallback
     }
 
     await deduplicateLocalTags();

@@ -35,6 +35,19 @@ export interface LocalSaving {
   linkedExpenseId?: string;
 }
 
+export interface LocalDeleteLog {
+  id: string; // unique UUID or timestamp-based ID
+  _id?: string; // MongoDB ObjectId if synced
+  userId: string;
+  entityType: "expense" | "saving" | "tag";
+  entityId: string;
+  title: string;
+  details?: string;
+  data: Record<string, unknown>;
+  deletedAt: string; // ISO string
+  syncStatus?: "synced" | "syncing" | "pending";
+}
+
 export interface SyncQueueItem {
   id?: number;
   clientId: string;
@@ -49,6 +62,7 @@ export class BudgetDatabase extends Dexie {
   tags!: Table<LocalTag, string>;
   savings!: Table<LocalSaving, string>;
   syncQueue!: Table<SyncQueueItem, number>;
+  deleteLogs!: Table<LocalDeleteLog, string>;
 
   constructor() {
     super("BudgetTrackerDB");
@@ -69,6 +83,14 @@ export class BudgetDatabase extends Dexie {
       tags: "_id, userId, name",
       savings: "clientId, _id, userId, date, syncStatus, linkedExpenseId",
       syncQueue: "++id, clientId, entity, action, createdAt",
+    });
+    // v4: adds deleteLogs table for soft delete / recovery history
+    this.version(4).stores({
+      expenses: "clientId, _id, userId, date, syncStatus, *tagIds",
+      tags: "_id, userId, name",
+      savings: "clientId, _id, userId, date, syncStatus, linkedExpenseId",
+      syncQueue: "++id, clientId, entity, action, createdAt",
+      deleteLogs: "id, userId, entityType, deletedAt",
     });
   }
 }
@@ -149,6 +171,7 @@ export async function clearLocalUserData() {
     await db.tags.clear();
     await db.savings.clear();
     await db.syncQueue.clear();
+    await db.deleteLogs.clear();
   } catch (err) {
     console.error("Failed to clear local user data:", err);
   }

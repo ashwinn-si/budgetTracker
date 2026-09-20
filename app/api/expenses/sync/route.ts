@@ -4,6 +4,7 @@ import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
 import { Tag } from "@/models/Tag";
 import { Saving } from "@/models/Saving";
+import { DeleteLog } from "@/models/DeleteLog";
 import { getCurrentUser } from "@/lib/auth";
 
 interface SyncItem {
@@ -141,7 +142,42 @@ async function processExpense(
       throw new Error("delete requires clientId or payload.id");
     }
 
-    await Expense.deleteOne(deleteFilter);
+    const existing = await Expense.findOne(deleteFilter);
+    if (existing) {
+      await DeleteLog.findOneAndUpdate(
+        { userId, entityId: existing.clientId || existing._id.toString() },
+        {
+          $set: {
+            userId,
+            entityType: "expense",
+            entityId: existing.clientId || existing._id.toString(),
+            title: existing.note || `Expense: ${existing.amount}`,
+            details: `${existing.amount} • ${new Date(existing.date).toLocaleDateString()}`,
+            data: existing.toObject(),
+            deletedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+      await Expense.deleteOne({ _id: existing._id });
+    } else if (payload.deleteSnapshot) {
+      const snap = payload.deleteSnapshot as Record<string, unknown>;
+      await DeleteLog.findOneAndUpdate(
+        { userId, entityId: clientId || String(payload.id) },
+        {
+          $set: {
+            userId,
+            entityType: "expense",
+            entityId: clientId || String(payload.id),
+            title: (snap.note as string) || `Expense: ${snap.amount}`,
+            details: `${snap.amount} • ${snap.date ? new Date(snap.date as string).toLocaleDateString() : "Recent"}`,
+            data: snap,
+            deletedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+    }
   }
 }
 
@@ -185,25 +221,58 @@ async function processTag(
     }
 
   } else if (action === "delete") {
+    let tag = null;
     if (tagName) {
-      const tag = await Tag.findOne({ name: tagName, userId });
-      if (tag) {
-        await Expense.updateMany({ userId, tagIds: tag._id }, { $pull: { tagIds: tag._id } });
-        await Tag.deleteOne({ _id: tag._id, userId });
-      }
+      tag = await Tag.findOne({ name: tagName, userId });
     } else {
       const isValidObjectId = /^[a-f\d]{24}$/i.test(clientId);
-      const tag = await Tag.findOne({
+      tag = await Tag.findOne({
         userId,
         $or: [
           ...(isValidObjectId ? [{ _id: clientId }] : []),
           { clientId },
         ],
       });
-      if (tag) {
-        await Expense.updateMany({ userId, tagIds: tag._id }, { $pull: { tagIds: tag._id } });
-        await Tag.deleteOne({ _id: tag._id, userId });
-      }
+    }
+
+    if (tag) {
+      const affectedExpenses = await Expense.find({ userId, tagIds: tag._id }).select("_id");
+      const affectedExpenseIds = affectedExpenses.map((e) => e._id.toString());
+      await DeleteLog.findOneAndUpdate(
+        { userId, entityId: tag._id.toString() },
+        {
+          $set: {
+            userId,
+            entityType: "tag",
+            entityId: tag._id.toString(),
+            title: tag.name,
+            details: `Category • ${tag.colorKey}`,
+            data: { ...tag.toObject(), affectedExpenseIds },
+            deletedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+
+      await Expense.updateMany({ userId, tagIds: tag._id }, { $pull: { tagIds: tag._id } });
+      await Tag.deleteOne({ _id: tag._id, userId });
+    } else if (payload.deleteSnapshot) {
+      const snap = payload.deleteSnapshot as Record<string, unknown>;
+      await DeleteLog.findOneAndUpdate(
+        { userId, entityId: clientId || String(payload.tagId || payload.id) },
+        {
+          $set: {
+            userId,
+            entityType: "tag",
+            entityId: clientId || String(payload.tagId || payload.id),
+            title: (snap.name as string) || tagName || "Category",
+            details: `Category • ${(snap.colorKey as string) || "#22C55E"}`,
+            data: snap,
+            deletedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
     }
   }
 }
@@ -274,7 +343,42 @@ async function processSaving(
       throw new Error("delete requires clientId or payload.id");
     }
 
-    await Saving.deleteOne(deleteFilter);
+    const existing = await Saving.findOne(deleteFilter);
+    if (existing) {
+      await DeleteLog.findOneAndUpdate(
+        { userId, entityId: existing.clientId || existing._id.toString() },
+        {
+          $set: {
+            userId,
+            entityType: "saving",
+            entityId: existing.clientId || existing._id.toString(),
+            title: existing.note || `${existing.type === "deposit" ? "Deposit" : "Withdrawal"}: ${existing.amount}`,
+            details: `${existing.type === "deposit" ? "Deposit" : "Withdrawal"} • ${existing.amount} • ${new Date(existing.date).toLocaleDateString()}`,
+            data: existing.toObject(),
+            deletedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+      await Saving.deleteOne({ _id: existing._id });
+    } else if (payload.deleteSnapshot) {
+      const snap = payload.deleteSnapshot as Record<string, unknown>;
+      await DeleteLog.findOneAndUpdate(
+        { userId, entityId: clientId || String(payload.id) },
+        {
+          $set: {
+            userId,
+            entityType: "saving",
+            entityId: clientId || String(payload.id),
+            title: (snap.note as string) || `Saving: ${snap.amount}`,
+            details: `${snap.type || "Saving"} • ${snap.amount}`,
+            data: snap,
+            deletedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+    }
   }
 }
 

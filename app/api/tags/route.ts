@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Tag } from "@/models/Tag";
 import { Expense } from "@/models/Expense";
+import { DeleteLog } from "@/models/DeleteLog";
 import { getCurrentUser } from "@/lib/auth";
 
 export async function GET(req: NextRequest) {
@@ -142,12 +143,34 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ success: true });
     }
 
-    await Tag.deleteOne({ _id: id, userId });
-    // Remove tagId from any expenses referencing it
-    await Expense.updateMany(
-      { userId, tagIds: id },
-      { $pull: { tagIds: id } }
-    );
+    const tag = await Tag.findOne({ _id: id, userId });
+    if (tag) {
+      const affectedExpenses = await Expense.find({ userId, tagIds: tag._id }).select("_id");
+      const affectedExpenseIds = affectedExpenses.map((e) => e._id.toString());
+
+      await DeleteLog.findOneAndUpdate(
+        { userId, entityId: tag._id.toString() },
+        {
+          $set: {
+            userId,
+            entityType: "tag",
+            entityId: tag._id.toString(),
+            title: tag.name,
+            details: `Category • ${tag.colorKey}`,
+            data: { ...tag.toObject(), affectedExpenseIds },
+            deletedAt: new Date(),
+          },
+        },
+        { upsert: true, new: true }
+      );
+
+      await Tag.deleteOne({ _id: id, userId });
+      // Remove tagId from any expenses referencing it
+      await Expense.updateMany(
+        { userId, tagIds: id },
+        { $pull: { tagIds: id } }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

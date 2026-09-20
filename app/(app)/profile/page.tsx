@@ -18,7 +18,14 @@ import {
   Share2,
   Copy,
   FileDown,
-  Code
+  Code,
+  RotateCcw,
+  Archive,
+  Receipt,
+  PiggyBank,
+  Tag as TagIcon,
+  History,
+  Sparkles
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -29,7 +36,13 @@ import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useCurrency } from "@/context/CurrencyContext";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
-import { clearAllLocalExpenses } from "@/lib/offline/syncQueue";
+import { db, LocalDeleteLog } from "@/lib/offline/db";
+import {
+  clearAllLocalExpenses,
+  recoverDeletedItem,
+  permanentDeleteLog,
+  clearAllDeleteLogs
+} from "@/lib/offline/syncQueue";
 
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
@@ -228,6 +241,139 @@ export default function ProfilePage() {
     if (user?.shareId) {
       navigator.clipboard.writeText(`${window.location.origin}/share/${user.shareId}`);
       toast.success("Link copied!");
+    }
+  };
+
+  // ── Delete Logs & Recovery State ──
+  const rawDeleteLogs = useLiveQuery(() => db.deleteLogs.toArray(), []) || [];
+  const [deleteLogFilter, setDeleteLogFilter] = useState<"all" | "expense" | "saving" | "tag">("all");
+  const [recoveringId, setRecoveringId] = useState<string | null>(null);
+  const [logToDeletePermanently, setLogToDeletePermanently] = useState<LocalDeleteLog | null>(null);
+  const [isEmptyBinModalOpen, setIsEmptyBinModalOpen] = useState(false);
+  const [isClearingBin, setIsClearingBin] = useState(false);
+
+  // Sync server delete logs on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function syncDeleteLogs() {
+      try {
+        const storedToken =
+          typeof window !== "undefined" ? sessionStorage.getItem("budget_access_token") : null;
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (storedToken) headers["Authorization"] = `Bearer ${storedToken}`;
+        const res = await fetch("/api/delete-logs", { headers });
+        if (res.ok) {
+          const data = await res.json();
+          if (isMounted && Array.isArray(data.deleteLogs)) {
+            for (const sLog of data.deleteLogs) {
+              const logId = sLog._id || sLog.entityId || `del_${sLog.deletedAt}`;
+              await db.deleteLogs.put({
+                id: logId,
+                _id: sLog._id,
+                userId: sLog.userId,
+                entityType: sLog.entityType,
+                entityId: sLog.entityId,
+                title: sLog.title,
+                details: sLog.details || "",
+                data: sLog.data || {},
+                deletedAt: typeof sLog.deletedAt === "string" ? sLog.deletedAt : new Date(sLog.deletedAt).toISOString(),
+                syncStatus: "synced",
+              });
+            }
+          }
+        }
+      } catch {
+        // Offline fallback
+      }
+    }
+    syncDeleteLogs();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const sortedDeleteLogs = useMemo(() => {
+    const list = [...rawDeleteLogs].sort(
+      (a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
+    );
+    if (deleteLogFilter === "all") return list;
+    return list.filter((item) => item.entityType === deleteLogFilter);
+  }, [rawDeleteLogs, deleteLogFilter]);
+
+  const logCounts = useMemo(() => {
+    return {
+      all: rawDeleteLogs.length,
+      expense: rawDeleteLogs.filter((l) => l.entityType === "expense").length,
+      saving: rawDeleteLogs.filter((l) => l.entityType === "saving").length,
+      tag: rawDeleteLogs.filter((l) => l.entityType === "tag").length,
+    };
+  }, [rawDeleteLogs]);
+
+  const formatTimeAgo = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - d.getTime();
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1) return "Just now";
+      if (diffMin < 60) return `${diffMin}m ago`;
+      const diffHours = Math.floor(diffMin / 60);
+      if (diffHours < 24) return `${diffHours}h ago`;
+      const diffDays = Math.floor(diffHours / 24);
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+    } catch {
+      return "Recently";
+    }
+  };
+
+  const handleRecover = async (log: LocalDeleteLog) => {
+    setRecoveringId(log.id);
+    try {
+      const res = await recoverDeletedItem(log.id);
+      if (res.success) {
+        const typeLabel =
+          log.entityType === "expense"
+            ? "Expense"
+            : log.entityType === "saving"
+            ? "Saving"
+            : "Category";
+        toast.success(`${typeLabel} restored successfully!`);
+      } else {
+        toast.error(res.error || "Failed to recover item");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to restore item");
+    } finally {
+      setRecoveringId(null);
+    }
+  };
+
+  const confirmPermanentDelete = async () => {
+    if (!logToDeletePermanently) return;
+    try {
+      await permanentDeleteLog(logToDeletePermanently.id);
+      toast.success("Record deleted permanently");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete record");
+    } finally {
+      setLogToDeletePermanently(null);
+    }
+  };
+
+  const confirmEmptyBin = async () => {
+    setIsClearingBin(true);
+    try {
+      await clearAllDeleteLogs();
+      toast.success("Recycle bin emptied");
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to empty recycle bin");
+    } finally {
+      setIsClearingBin(false);
+      setIsEmptyBinModalOpen(false);
     }
   };
 
@@ -702,6 +848,203 @@ export default function ProfilePage() {
           </GlassCard>
         </div>
       </div>
+
+      {/* ── Full Width: Delete Logs & Data Recovery (Recycle Bin) ── */}
+      <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7 space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 shadow-sm border border-emerald-500/20">
+              <History className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg sm:text-xl font-serif-display font-medium text-[var(--text-primary)]">
+                  Delete Logs &amp; <em>Recovery</em>
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                  Recycle Bin
+                </span>
+              </div>
+              <p className="text-xs text-[var(--text-muted)] mt-0.5">
+                Accidentally deleted an item? Restore expenses, savings, and categories back to your account anytime.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-auto">
+            {rawDeleteLogs.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsEmptyBinModalOpen(true)}
+                className="text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-500/20"
+                icon={<Trash2 className="w-3.5 h-3.5" />}
+              >
+                Empty Bin
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-black/5 dark:border-white/5">
+          {[
+            { id: "all", label: "All Items", count: logCounts.all },
+            { id: "expense", label: "Expenses", count: logCounts.expense },
+            { id: "saving", label: "Savings", count: logCounts.saving },
+            { id: "tag", label: "Categories", count: logCounts.tag },
+          ].map((tab) => {
+            const active = deleteLogFilter === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setDeleteLogFilter(tab.id as any)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer select-none ${
+                  active
+                    ? "bg-emerald-500/20 text-emerald-800 dark:text-emerald-200 border border-emerald-500/40 font-semibold shadow-xs"
+                    : "bg-black/5 dark:bg-white/5 text-[var(--text-secondary)] hover:bg-black/10 dark:hover:bg-white/10 border border-transparent"
+                }`}
+              >
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                    active
+                      ? "bg-emerald-600 text-white dark:bg-emerald-500"
+                      : "bg-black/10 dark:bg-white/10 text-[var(--text-muted)]"
+                  }`}
+                >
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* List of Archived Items */}
+        {sortedDeleteLogs.length === 0 ? (
+          <div className="p-8 sm:p-12 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 flex flex-col items-center justify-center text-center space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600/70 dark:text-emerald-400/70 flex items-center justify-center">
+              <Archive className="w-6 h-6" />
+            </div>
+            <div className="space-y-1 max-w-sm">
+              <p className="text-sm font-semibold text-[var(--text-primary)]">
+                Recycle Bin is Empty
+              </p>
+              <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+                {deleteLogFilter === "all"
+                  ? "When you delete transactions or categories, snapshots are saved here so you can recover them at any time."
+                  : `No deleted ${deleteLogFilter} records found.`}
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+            {sortedDeleteLogs.map((log) => {
+              const isExpense = log.entityType === "expense";
+              const isSaving = log.entityType === "saving";
+              const isTag = log.entityType === "tag";
+              const amountNum = Number(log.data?.amount);
+              const hasAmount = !isNaN(amountNum) && (isExpense || isSaving);
+              const isRecovering = recoveringId === log.id;
+
+              return (
+                <div
+                  key={log.id}
+                  className="p-3.5 sm:p-4 rounded-2xl bg-white/50 dark:bg-black/30 border border-white/60 dark:border-white/10 hover:border-emerald-500/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs"
+                >
+                  {/* Item Details */}
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 border ${
+                        isExpense
+                          ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                          : isSaving
+                          ? "bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/20"
+                          : "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20"
+                      }`}
+                    >
+                      {isExpense && <Receipt className="w-5 h-5" />}
+                      {isSaving && <PiggyBank className="w-5 h-5" />}
+                      {isTag && <TagIcon className="w-5 h-5" />}
+                    </div>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${
+                            isExpense
+                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
+                              : isSaving
+                              ? "bg-teal-500/15 text-teal-700 dark:text-teal-300"
+                              : "bg-purple-500/15 text-purple-700 dark:text-purple-300"
+                          }`}
+                        >
+                          {log.entityType}
+                        </span>
+                        <h4 className="text-xs sm:text-sm font-semibold text-[var(--text-primary)] truncate">
+                          {log.title}
+                        </h4>
+                        {hasAmount && (
+                          <span className="text-xs sm:text-sm font-bold font-heading text-[var(--text-primary)]">
+                            {formatAmount(amountNum)}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 text-[11px] text-[var(--text-muted)] mt-1 flex-wrap">
+                        {isSaving && Boolean(log.data?.type) && (
+                          <span className="capitalize text-teal-600 dark:text-teal-400 font-medium">
+                            {String(log.data?.type)}
+                          </span>
+                        )}
+                        {isTag && typeof log.data?.colorKey === "string" && (
+                          <span className="inline-flex items-center gap-1">
+                            <span
+                              className="w-2.5 h-2.5 rounded-full inline-block"
+                              style={{ backgroundColor: log.data.colorKey }}
+                            />
+                            <span>{log.data.colorKey}</span>
+                          </span>
+                        )}
+                        {log.details && (
+                          <span className="truncate max-w-[200px]">{log.details}</span>
+                        )}
+                        <span>•</span>
+                        <span className="text-[var(--text-secondary)]">
+                          Deleted {formatTimeAgo(log.deletedAt)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                    <Button
+                      variant="accent-ghost"
+                      size="sm"
+                      onClick={() => handleRecover(log)}
+                      isLoading={isRecovering}
+                      icon={<RotateCcw className={`w-3.5 h-3.5 ${isRecovering ? "animate-spin" : ""}`} />}
+                      className="text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
+                    >
+                      Recover
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setLogToDeletePermanently(log)}
+                      title="Permanently Delete"
+                      className="p-2 rounded-xl text-[var(--text-muted)] hover:text-rose-600 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </GlassCard>
       
       {/* Footer Credit */}
       <div className="pt-8 pb-4 flex justify-center">
@@ -728,6 +1071,29 @@ export default function ProfilePage() {
         title="Reset All Transactions?"
         message="Are you sure you want to clear all expenses and savings records from both the database and this device? Categories and your account will be preserved."
         confirmText="Clear Everything"
+        variant="danger"
+      />
+
+      {/* Confirmation Modal for Permanent Delete Single Item */}
+      <ConfirmModal
+        isOpen={!!logToDeletePermanently}
+        onClose={() => setLogToDeletePermanently(null)}
+        onConfirm={confirmPermanentDelete}
+        title="Delete Record Permanently?"
+        message={`Are you sure you want to permanently delete "${logToDeletePermanently?.title}" from the recycle bin? This action cannot be undone.`}
+        confirmText="Delete Forever"
+        variant="danger"
+      />
+
+      {/* Confirmation Modal for Emptying Entire Recycle Bin */}
+      <ConfirmModal
+        isOpen={isEmptyBinModalOpen}
+        onClose={() => setIsEmptyBinModalOpen(false)}
+        onConfirm={confirmEmptyBin}
+        isLoading={isClearingBin}
+        title="Empty Entire Recycle Bin?"
+        message="Are you sure you want to permanently delete all archived records in the recycle bin? None of these items will be recoverable."
+        confirmText="Empty Recycle Bin"
         variant="danger"
       />
     </div>
