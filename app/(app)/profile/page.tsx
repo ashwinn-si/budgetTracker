@@ -26,11 +26,13 @@ import {
   Tag as TagIcon,
   History,
   Sparkles,
-  Unlink
+  Unlink,
+  Plane
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { TripsCard } from "@/components/trips/TripsCard";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
@@ -52,6 +54,16 @@ export default function ProfilePage() {
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, isDecimal, setIsDecimal, formatAmount } = useCurrency();
   const { status, pendingCount, lastSyncedAt, syncNow, isSyncing } = useAuth().syncStatus;
+
+  // Scroll to a section when navigated here with a hash (e.g. /profile#trips)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#trips") return;
+    const target = document.getElementById("trips");
+    if (target) {
+      requestAnimationFrame(() => target.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }, []);
 
   // Sheets sync state
   const [isSheetsSyncing, setIsSheetsSyncing] = useState(false);
@@ -360,7 +372,7 @@ export default function ProfilePage() {
     });
     return map;
   }, [allTags]);
-  const [deleteLogFilter, setDeleteLogFilter] = useState<"all" | "expense" | "saving" | "tag">("all");
+  const [deleteLogFilter, setDeleteLogFilter] = useState<"all" | "expense" | "saving" | "tag" | "trip">("all");
   const [recoveringId, setRecoveringId] = useState<string | null>(null);
   const [logToDeletePermanently, setLogToDeletePermanently] = useState<LocalDeleteLog | null>(null);
   const [isEmptyBinModalOpen, setIsEmptyBinModalOpen] = useState(false);
@@ -420,6 +432,7 @@ export default function ProfilePage() {
       expense: rawDeleteLogs.filter((l) => l.entityType === "expense").length,
       saving: rawDeleteLogs.filter((l) => l.entityType === "saving").length,
       tag: rawDeleteLogs.filter((l) => l.entityType === "tag").length,
+      trip: rawDeleteLogs.filter((l) => l.entityType === "trip").length,
     };
   }, [rawDeleteLogs]);
 
@@ -451,6 +464,8 @@ export default function ProfilePage() {
             ? "Expense"
             : log.entityType === "saving"
             ? "Saving"
+            : log.entityType === "trip"
+            ? "Trip"
             : "Category";
         toast.success(`${typeLabel} restored successfully!`);
       } else {
@@ -597,6 +612,9 @@ export default function ProfilePage() {
               })}
             </div>
           </GlassCard>
+
+          {/* Trips */}
+          <TripsCard />
 
           {/* Decimal Places Setting */}
           <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7">
@@ -1097,6 +1115,7 @@ export default function ProfilePage() {
             { id: "expense", label: "Expenses", count: logCounts.expense },
             { id: "saving", label: "Savings", count: logCounts.saving },
             { id: "tag", label: "Categories", count: logCounts.tag },
+            { id: "trip", label: "Trips", count: logCounts.trip },
           ].map((tab) => {
             const active = deleteLogFilter === tab.id;
             return (
@@ -1148,6 +1167,7 @@ export default function ProfilePage() {
               const isExpense = log.entityType === "expense";
               const isSaving = log.entityType === "saving";
               const isTag = log.entityType === "tag";
+              const isTrip = log.entityType === "trip";
               const amountNum = Number(log.data?.amount);
               const hasAmount = !isNaN(amountNum) && (isExpense || isSaving);
               const isRecovering = recoveringId === log.id;
@@ -1216,12 +1236,15 @@ export default function ProfilePage() {
                           ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20"
                           : isSaving
                           ? "bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/20"
+                          : isTrip
+                          ? "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/20"
                           : "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20"
                       }`}
                     >
                       {isExpense && <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />}
                       {isSaving && <PiggyBank className="w-4 h-4 sm:w-5 sm:h-5" />}
                       {isTag && <TagIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      {isTrip && <Plane className="w-4 h-4 sm:w-5 sm:h-5" />}
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -1234,6 +1257,8 @@ export default function ProfilePage() {
                                 ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
                                 : isSaving
                                 ? "bg-teal-500/15 text-teal-700 dark:text-teal-300"
+                                : isTrip
+                                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                                 : "bg-purple-500/15 text-purple-700 dark:text-purple-300"
                             }`}
                           >
