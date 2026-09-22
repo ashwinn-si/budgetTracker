@@ -1001,6 +1001,7 @@ export async function pullFromServer(
             endDate: t.endDate ? new Date(t.endDate as string).toISOString() : null,
             isSharingEnabled: Boolean(t.isSharingEnabled),
             shareId: (t.shareId as string) || null,
+            shareMode: t.shareMode === "monthly" || t.shareMode === "full" ? t.shareMode : undefined,
             createdAt: t.createdAt ? new Date(t.createdAt as string).toISOString() : undefined,
             updatedAt: t.updatedAt ? new Date(t.updatedAt as string).toISOString() : undefined,
           };

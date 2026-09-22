@@ -385,6 +385,33 @@ export default function ProfilePage() {
     }
   };
 
+  const [shareModeUpdatingTripId, setShareModeUpdatingTripId] = useState<string | null>(null);
+
+  const handleSetShareMode = async (trip: LocalTrip, shareMode: "monthly" | "full") => {
+    const effectiveCurrent = trip.shareMode ?? (trip.tripId === GENERAL_TRIP_ID ? "monthly" : "full");
+    if (effectiveCurrent === shareMode) return;
+    setShareModeUpdatingTripId(trip.tripId);
+    try {
+      const res = await fetch("/api/user/share", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId: trip.tripId, shareMode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await db.trips.update(trip.tripId, { shareMode: data.shareMode });
+        toast.success(`Report set to ${data.shareMode === "full" ? "Full report" : "Monthly"}`);
+      } else {
+        toast.error(data.error || "Failed to update report mode.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Network error.");
+    } finally {
+      setShareModeUpdatingTripId(null);
+    }
+  };
+
   // ── Delete Logs & Recovery State ──
   const rawDeleteLogs = useLiveQuery(() => db.deleteLogs.toArray(), []) || [];
   const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
@@ -1066,6 +1093,30 @@ export default function ProfilePage() {
                       >
                         Copy
                       </Button>
+                    </div>
+                  )}
+
+                  {trip.isSharingEnabled && trip.shareId && (
+                    <div className="flex items-center gap-1 p-1 rounded-full bg-white/40 dark:bg-black/30 border border-white/50 dark:border-white/10 w-fit">
+                      {(["monthly", "full"] as const).map((modeOption) => {
+                        const effectiveMode = trip.shareMode ?? (trip.tripId === GENERAL_TRIP_ID ? "monthly" : "full");
+                        const active = effectiveMode === modeOption;
+                        return (
+                          <button
+                            key={modeOption}
+                            type="button"
+                            onClick={() => handleSetShareMode(trip, modeOption)}
+                            disabled={shareModeUpdatingTripId === trip.tripId}
+                            className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                              active
+                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold shadow-sm"
+                                : "text-[var(--text-secondary)] hover:bg-white/60 dark:hover:bg-white/5"
+                            }`}
+                          >
+                            {modeOption === "monthly" ? "Monthly" : "Full report"}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

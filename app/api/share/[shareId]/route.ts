@@ -5,7 +5,14 @@ import { Expense } from "@/models/Expense";
 import { Saving } from "@/models/Saving";
 import { Trip, ITrip } from "@/models/Trip";
 import { ensureGeneralTrip } from "@/lib/server/trips";
-import { GENERAL_TRIP_ID, getVisibleTripIds, getSourceTripIds, tripIdMatchValues } from "@/lib/trips";
+import {
+  GENERAL_TRIP_ID,
+  getVisibleTripIds,
+  getSourceTripIds,
+  tripIdMatchValues,
+  getEffectiveShareMode,
+} from "@/lib/trips";
+import { differenceInCalendarDays } from "date-fns";
 
 interface CategoryBreakdownEntry {
   tagId: string;
@@ -64,6 +71,8 @@ export async function GET(
     const sourceTripIds = new Set(getSourceTripIds(userTrips, trip.tripId));
     const matchValues = tripIdMatchValues(visibleTripIds);
 
+    const mode = getEffectiveShareMode(trip);
+
     const url = new URL(request.url);
     const monthParam = url.searchParams.get("month");
     const yearParam = url.searchParams.get("year");
@@ -75,10 +84,13 @@ export async function GET(
     const startOfMonth = new Date(targetYear, targetMonth, 1);
     const endOfMonth = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
 
+    const dateFilter =
+      mode === "full" ? {} : { date: { $gte: startOfMonth, $lte: endOfMonth } };
+
     const expenses = await Expense.find({
       userId: ownerUserId,
       tripId: { $in: matchValues },
-      date: { $gte: startOfMonth, $lte: endOfMonth },
+      ...dateFilter,
     })
       .populate("tagIds")
       .sort({ date: -1 })
@@ -88,6 +100,24 @@ export async function GET(
       typeof v === "number" ? v : parseFloat(String(v)) || 0;
 
     const totalSpentThisMonth = expenses.reduce((sum, e) => sum + toAmount(e.amount), 0);
+
+    let range: { from: string | null; to: string | null } = { from: null, to: null };
+    let dailyAverage = 0;
+    if (mode === "full") {
+      if (trip.startDate && trip.endDate) {
+        range = { from: trip.startDate.toISOString(), to: trip.endDate.toISOString() };
+      } else if (expenses.length > 0) {
+        const dates = expenses.map((e) => new Date(e.date).getTime());
+        range = {
+          from: new Date(Math.min(...dates)).toISOString(),
+          to: new Date(Math.max(...dates)).toISOString(),
+        };
+      }
+      if (range.from && range.to) {
+        const days = Math.max(1, differenceInCalendarDays(new Date(range.to), new Date(range.from)) + 1);
+        dailyAverage = totalSpentThisMonth / days;
+      }
+    }
 
     let totalSavings: number | null = null;
     if (trip.tripId === GENERAL_TRIP_ID) {
@@ -157,7 +187,7 @@ export async function GET(
         percentage: combinedTotal > 0 ? ((b.total / combinedTotal) * 100).toFixed(1) : "0",
       }));
 
-    const recentExpenses = expenses.slice(0, 50).map((exp) => {
+    const recentExpenses = expenses.slice(0, mode === "full" ? 200 : 50).map((exp) => {
       const expTripId = (exp.tripId as string) || GENERAL_TRIP_ID;
       const isOwn = expTripId === trip!.tripId;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -188,10 +218,15 @@ export async function GET(
       data: {
         userName: user.name,
         currency: user.currency || "INR",
+        mode,
+        totalSpent: totalSpentThisMonth,
         totalSpentThisMonth,
         totalSavings,
         categoryBreakdown,
         recentExpenses,
+        expenseCount: expenses.length,
+        range: mode === "full" ? range : null,
+        dailyAverage: mode === "full" ? dailyAverage : null,
         trip: {
           tripId: trip.tripId,
           name: trip.name,

@@ -17,6 +17,7 @@ import {
   Receipt,
   Plane,
 } from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { useTheme } from "@/context/ThemeContext";
 import { Loader } from "@/components/ui/Loader";
@@ -66,10 +67,15 @@ interface TripInfo {
 interface SharedData {
   userName: string;
   currency: string;
+  mode: "monthly" | "full";
+  totalSpent: number;
   totalSpentThisMonth: number;
   totalSavings: number | null;
   categoryBreakdown: CategoryBreakdown[];
   recentExpenses: RecentExpense[];
+  expenseCount: number;
+  range: { from: string | null; to: string | null } | null;
+  dailyAverage: number | null;
   trip: TripInfo;
   month: string;
   year: number;
@@ -94,6 +100,56 @@ function FromTripPill({
       {emoji ? <span className="shrink-0">{emoji}</span> : <Plane className="w-3 h-3 shrink-0" />}
       <span className="truncate">From {name}</span>
     </span>
+  );
+}
+
+function ExpenseRow({
+  exp,
+  formatAmount,
+  showDate,
+  formatExpenseDate,
+}: {
+  exp: RecentExpense;
+  formatAmount: (val: number) => string;
+  showDate: boolean;
+  formatExpenseDate: (val: string) => string;
+}) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+      {showDate && (
+        <div className="w-14 shrink-0 text-xs font-medium text-[var(--text-muted)]">
+          {formatExpenseDate(exp.date)}
+        </div>
+      )}
+      <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+        <span className="text-sm text-[var(--text-primary)] truncate">
+          {exp.note || "Expense"}
+        </span>
+        {exp.tags.map((tag) => (
+          <span
+            key={tag.name}
+            className="text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0"
+            style={{
+              backgroundColor: `${tag.colorKey}1F`,
+              borderColor: `${tag.colorKey}40`,
+              color: tag.colorKey,
+            }}
+          >
+            {tag.name}
+          </span>
+        ))}
+        {exp.sourceTrip && (
+          <FromTripPill
+            name={exp.sourceTrip.name}
+            emoji={exp.sourceTrip.emoji}
+            colorKey={exp.sourceTrip.colorKey}
+          />
+        )}
+      </div>
+      <div className="shrink-0 font-serif-display font-medium text-[var(--text-primary)]">
+        {formatAmount(exp.amount)}
+      </div>
+    </div>
   );
 }
 
@@ -166,6 +222,29 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
     new Date(val).toLocaleDateString("en-US", { day: "numeric", month: "short" });
 
   const isGeneral = data.trip.tripId === GENERAL_TRIP_ID;
+  const isFullMode = data.mode === "full";
+
+  const formatRange = (range: { from: string | null; to: string | null } | null) => {
+    if (!range?.from || !range?.to) return null;
+    const from = parseISO(range.from);
+    const to = parseISO(range.to);
+    const sameYear = from.getFullYear() === to.getFullYear();
+    return `${format(from, "d MMM")} – ${format(to, sameYear ? "d MMM yyyy" : "d MMM yyyy")}`;
+  };
+
+  const groupExpensesByDay = (list: RecentExpense[]) => {
+    const groups: { dateKey: string; label: string; items: RecentExpense[] }[] = [];
+    for (const exp of list) {
+      const dateKey = exp.date.slice(0, 10);
+      const last = groups[groups.length - 1];
+      if (last && last.dateKey === dateKey) {
+        last.items.push(exp);
+      } else {
+        groups.push({ dateKey, label: format(parseISO(exp.date), "EEE, d MMM"), items: [exp] });
+      }
+    }
+    return groups;
+  };
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 font-sans selection:bg-emerald-500/30">
@@ -235,12 +314,23 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
                 <TrendingDown className="w-5 h-5" />
               </div>
               <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                Spent in {data.month}
+                {isFullMode ? "Total trip spend" : `Spent in ${data.month}`}
               </h2>
             </div>
             <div className="text-4xl sm:text-5xl font-serif-display font-bold text-[var(--text-primary)] tracking-tight">
-              {formatAmount(data.totalSpentThisMonth)}
+              {formatAmount(isFullMode ? data.totalSpent : data.totalSpentThisMonth)}
             </div>
+            {isFullMode && (
+              <div className="mt-3 space-y-0.5">
+                {formatRange(data.range) && (
+                  <p className="text-sm text-[var(--text-secondary)]">{formatRange(data.range)}</p>
+                )}
+                <p className="text-xs text-[var(--text-muted)]">
+                  {data.expenseCount} expense{data.expenseCount === 1 ? "" : "s"}
+                  {data.dailyAverage != null && ` · ${formatAmount(data.dailyAverage)}/day`}
+                </p>
+              </div>
+            )}
           </GlassCard>
 
           {/* Savings Card */}
@@ -273,29 +363,31 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
                   Category Breakdown
                 </h2>
                 <p className="text-sm text-[var(--text-muted)]">
-                  For {data.month} {data.year}
+                  {isFullMode ? "Whole trip" : `For ${data.month} ${data.year}`}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="text-sm font-medium w-24 text-center text-[var(--text-primary)]">
-                {data.month} {data.year}
-              </span>
-              <button
-                onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()}
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
+            {!isFullMode && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                  className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-sm font-medium w-24 text-center text-[var(--text-primary)]">
+                  {data.month} {data.year}
+                </span>
+                <button
+                  onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                  className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {data.categoryBreakdown.length > 0 ? (
@@ -344,12 +436,12 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
             </div>
           ) : (
             <div className="py-12 text-center text-[var(--text-muted)]">
-              No expenses recorded for this month.
+              {isFullMode ? "No expenses recorded for this trip." : "No expenses recorded for this month."}
             </div>
           )}
         </GlassCard>
 
-        {/* Recent Expenses */}
+        {/* Recent / All Expenses */}
         <GlassCard variant="mid" className={`p-6 sm:p-8 transition-opacity duration-300 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
           <div className="flex items-center gap-3 mb-6">
             <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -357,58 +449,40 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
             </div>
             <div>
               <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)]">
-                Recent Expenses
+                {isFullMode ? "All expenses" : "Recent Expenses"}
               </h2>
               <p className="text-sm text-[var(--text-muted)]">
-                For {data.month} {data.year}
+                {isFullMode ? "Whole trip" : `For ${data.month} ${data.year}`}
               </p>
             </div>
           </div>
 
           {data.recentExpenses.length > 0 ? (
-            <div className="space-y-2">
-              {data.recentExpenses.map((exp, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-3 p-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                >
-                  <div className="w-14 shrink-0 text-xs font-medium text-[var(--text-muted)]">
-                    {formatExpenseDate(exp.date)}
+            isFullMode ? (
+              <div className="space-y-5">
+                {groupExpensesByDay(data.recentExpenses).map((group) => (
+                  <div key={group.dateKey}>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] px-3 mb-1.5">
+                      {group.label}
+                    </div>
+                    <div className="space-y-2">
+                      {group.items.map((exp, idx) => (
+                        <ExpenseRow key={idx} exp={exp} formatAmount={formatAmount} showDate={false} formatExpenseDate={formatExpenseDate} />
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-                    <span className="text-sm text-[var(--text-primary)] truncate">
-                      {exp.note || "Expense"}
-                    </span>
-                    {exp.tags.map((tag) => (
-                      <span
-                        key={tag.name}
-                        className="text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0"
-                        style={{
-                          backgroundColor: `${tag.colorKey}1F`,
-                          borderColor: `${tag.colorKey}40`,
-                          color: tag.colorKey,
-                        }}
-                      >
-                        {tag.name}
-                      </span>
-                    ))}
-                    {exp.sourceTrip && (
-                      <FromTripPill
-                        name={exp.sourceTrip.name}
-                        emoji={exp.sourceTrip.emoji}
-                        colorKey={exp.sourceTrip.colorKey}
-                      />
-                    )}
-                  </div>
-                  <div className="shrink-0 font-serif-display font-medium text-[var(--text-primary)]">
-                    {formatAmount(exp.amount)}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {data.recentExpenses.map((exp, idx) => (
+                  <ExpenseRow key={idx} exp={exp} formatAmount={formatAmount} showDate formatExpenseDate={formatExpenseDate} />
+                ))}
+              </div>
+            )
           ) : (
             <div className="py-12 text-center text-[var(--text-muted)]">
-              No expenses recorded for this month.
+              {isFullMode ? "No expenses recorded for this trip." : "No expenses recorded for this month."}
             </div>
           )}
         </GlassCard>

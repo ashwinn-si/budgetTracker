@@ -4,7 +4,7 @@ import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models/User";
 import { Trip } from "@/models/Trip";
 import { ensureGeneralTrip } from "@/lib/server/trips";
-import { GENERAL_TRIP_ID } from "@/lib/trips";
+import { GENERAL_TRIP_ID, getEffectiveShareMode } from "@/lib/trips";
 import crypto from "crypto";
 
 export async function PATCH(request: NextRequest) {
@@ -19,7 +19,22 @@ export async function PATCH(request: NextRequest) {
     const tripId =
       typeof body.tripId === "string" && body.tripId.trim() ? body.tripId.trim() : GENERAL_TRIP_ID;
 
-    if (typeof isSharingEnabled !== "boolean") {
+    const shareModeProvided = body.shareMode !== undefined;
+    if (shareModeProvided && body.shareMode !== "monthly" && body.shareMode !== "full") {
+      return NextResponse.json(
+        { error: 'shareMode must be "monthly" or "full"' },
+        { status: 400 }
+      );
+    }
+
+    if (isSharingEnabled === undefined && !shareModeProvided) {
+      return NextResponse.json(
+        { error: "At least one of isSharingEnabled or shareMode is required" },
+        { status: 400 }
+      );
+    }
+
+    if (isSharingEnabled !== undefined && typeof isSharingEnabled !== "boolean") {
       return NextResponse.json(
         { error: "isSharingEnabled must be a boolean" },
         { status: 400 }
@@ -52,15 +67,20 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    trip.isSharingEnabled = isSharingEnabled;
+    if (isSharingEnabled !== undefined) {
+      trip.isSharingEnabled = isSharingEnabled;
+    }
     if (shareId) {
       trip.shareId = shareId;
+    }
+    if (shareModeProvided) {
+      trip.shareMode = body.shareMode as "monthly" | "full";
     }
 
     await trip.save();
 
     // Keep the legacy user-level flag in step so the old /share/<userShareId> fallback can't outlive a disable
-    if (tripId === GENERAL_TRIP_ID) {
+    if (tripId === GENERAL_TRIP_ID && isSharingEnabled !== undefined) {
       await User.updateOne({ _id: user.userId }, { $set: { isSharingEnabled } });
     }
 
@@ -69,6 +89,7 @@ export async function PATCH(request: NextRequest) {
       tripId: trip.tripId,
       isSharingEnabled: trip.isSharingEnabled,
       shareId: trip.shareId,
+      shareMode: getEffectiveShareMode(trip),
     });
   } catch (error: unknown) {
     console.error("Error updating sharing preferences:", error);

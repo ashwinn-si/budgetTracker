@@ -14,6 +14,7 @@ export interface ITrip extends Document {
   endDate: Date | null;
   isSharingEnabled: boolean;
   shareId?: string;
+  shareMode?: "monthly" | "full";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -37,6 +38,7 @@ const TripSchema = new Schema<ITrip>(
     endDate: { type: Date, default: null },
     isSharingEnabled: { type: Boolean, default: false },
     shareId: { type: String, unique: true, sparse: true },
+    shareMode: { type: String, enum: ["monthly", "full"] },
   },
   { timestamps: true }
 );

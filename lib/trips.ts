@@ -7,7 +7,12 @@ export type TripLike = {
   emoji?: string;
   colorKey?: string;
   status?: string;
+  shareMode?: "monthly" | "full";
 };
+
+export function getEffectiveShareMode(trip: TripLike): "monthly" | "full" {
+  return trip.shareMode ?? (trip.tripId === GENERAL_TRIP_ID ? "monthly" : "full");
+}
 
 // Trips (other than the target) whose mirrorToTripIds includes the target. Not transitive.
 export function getSourceTripIds(trips: TripLike[], targetTripId: string): string[] {

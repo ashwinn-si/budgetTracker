@@ -38,6 +38,7 @@ export interface LocalTrip {
   endDate?: string | null;
   isSharingEnabled?: boolean;
   shareId?: string | null;
+  shareMode?: "monthly" | "full";
   createdAt?: string;
   updatedAt?: string;
 }
