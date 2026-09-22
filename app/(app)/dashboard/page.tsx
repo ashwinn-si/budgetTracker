@@ -126,10 +126,14 @@ function DashboardContent() {
     allExpenses.forEach((exp) => {
       const expDate = new Date(exp.date);
 
-      // Filter by tag if tags are selected
+      // Filter by tag (or virtual "trip:<id>" filter) if any are selected
       if (selectedTagsParam.length > 0) {
-        const hasTag = exp.tagIds?.some((tId) => selectedTagsParam.includes(tId));
-        if (!hasTag) return;
+        const hasMatch = selectedTagsParam.some((sel) =>
+          sel.startsWith("trip:")
+            ? (exp.tripId || GENERAL_TRIP_ID) === sel.slice(5)
+            : exp.tagIds?.includes(sel)
+        );
+        if (!hasMatch) return;
       }
 
       if (expDate >= start && expDate <= end) {
@@ -177,11 +181,22 @@ function DashboardContent() {
     return { totalSaved, totalFromSavings, balance: totalSaved - totalFromSavings };
   }, [allSavings]);
 
-  // Tag Breakdown
+  // Tag Breakdown — own expenses group by tag, mirrored expenses group into a
+  // virtual per-source-trip category since their tags belong to another trip.
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, { total: number; count: number }> = {};
 
     currentExpenses.forEach((exp) => {
+      const expTripId = exp.tripId || GENERAL_TRIP_ID;
+      if (expTripId !== activeTripId) {
+        const key = `trip:${expTripId}`;
+        map[key] = {
+          total: (map[key]?.total || 0) + exp.amount,
+          count: (map[key]?.count || 0) + 1,
+        };
+        return;
+      }
+
       if (!exp.tagIds || exp.tagIds.length === 0) {
         map["uncategorized"] = {
           total: (map["uncategorized"]?.total || 0) + exp.amount,
@@ -198,11 +213,23 @@ function DashboardContent() {
     });
 
     return Object.entries(map)
-      .map(([tagId, data]) => {
-        const tag = tagMap.get(tagId);
+      .map(([key, data]) => {
         const percentage = totalSpend > 0 ? (data.total / totalSpend) * 100 : 0;
+        if (key.startsWith("trip:")) {
+          const sourceTripId = key.slice(5);
+          const sourceTrip = trips.find((t) => t.tripId === sourceTripId);
+          return {
+            tagId: key,
+            name: `${sourceTrip?.emoji ? `${sourceTrip.emoji} ` : "✈ "}${sourceTrip?.name || "Trip"}`,
+            colorKey: sourceTrip?.colorKey || "#7A8C7C",
+            total: data.total,
+            count: data.count,
+            percentage: Math.round(percentage * 10) / 10,
+          };
+        }
+        const tag = tagMap.get(key);
         return {
-          tagId,
+          tagId: key,
           name: tag?.name || "Uncategorized",
           colorKey: tag?.colorKey || "#7A8C7C",
           total: data.total,
@@ -211,7 +238,33 @@ function DashboardContent() {
         };
       })
       .sort((a, b) => b.total - a.total);
-  }, [currentExpenses, tagMap, totalSpend]);
+  }, [currentExpenses, tagMap, totalSpend, activeTripId, trips]);
+
+  // Mirrored (cross-trip) spend included in the current totals, for the secondary totals line
+  const mirroredSummary = useMemo(() => {
+    const mirroredExpenses = currentExpenses.filter((exp) => (exp.tripId || GENERAL_TRIP_ID) !== activeTripId);
+    const total = mirroredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const tripIds = new Set(mirroredExpenses.map((exp) => exp.tripId || GENERAL_TRIP_ID));
+    return { total, tripCount: tripIds.size };
+  }, [currentExpenses, activeTripId]);
+
+  // Tag filter options: this trip's own tags plus a virtual option per source trip mirroring in
+  const tagFilterOptions = useMemo(() => {
+    const sourceTripIds = new Set<string>();
+    allExpenses.forEach((exp) => {
+      const tripId = exp.tripId || GENERAL_TRIP_ID;
+      if (tripId !== activeTripId) sourceTripIds.add(tripId);
+    });
+    const tripOptions = Array.from(sourceTripIds).map((tripId) => {
+      const trip = trips.find((t) => t.tripId === tripId);
+      return {
+        _id: `trip:${tripId}`,
+        name: `${trip?.emoji ? `${trip.emoji} ` : "✈ "}${trip?.name || "Trip"}`,
+        colorKey: trip?.colorKey || "#7A8C7C",
+      };
+    });
+    return [...allTags, ...tripOptions];
+  }, [allTags, allExpenses, activeTripId, trips]);
 
   // Filter actions
   const handleSelectPeriod = (preset: PeriodPreset, customStart?: Date, customEnd?: Date) => {
@@ -421,10 +474,10 @@ function DashboardContent() {
           </div>
         </div>
 
-        {allTags.length > 0 && (
+        {tagFilterOptions.length > 0 && (
           <div className="pt-2 border-t border-black/[0.04] dark:border-white/[0.06]">
             <TagFilter
-              tags={allTags}
+              tags={tagFilterOptions}
               selectedTagIds={selectedTagsParam}
               onToggleTag={handleToggleTag}
               onSelectAll={handleSelectAllTags}
@@ -468,7 +521,13 @@ function DashboardContent() {
               >
                 {currentExpenses.length > 0 ? formatAmount(totalSpend) : "—"}
               </span>
-              <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">this period</span>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">
+                {mirroredSummary.tripCount > 0
+                  ? `Includes ${formatAmount(mirroredSummary.total)} from ${mirroredSummary.tripCount} linked trip${
+                      mirroredSummary.tripCount === 1 ? "" : "s"
+                    }`
+                  : "this period"}
+              </span>
             </div>
 
             {/* Transactions */}
