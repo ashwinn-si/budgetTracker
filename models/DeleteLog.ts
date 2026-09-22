@@ -2,7 +2,7 @@ import mongoose, { Schema, Document, Model } from "mongoose";
 
 export interface IDeleteLog extends Document {
   userId: string;
-  entityType: "expense" | "saving" | "tag";
+  entityType: "expense" | "saving" | "tag" | "trip";
   entityId: string;
   title: string;
   details?: string;
@@ -17,7 +17,7 @@ const DeleteLogSchema = new Schema<IDeleteLog>(
     userId: { type: String, required: true, index: true },
     entityType: {
       type: String,
-      enum: ["expense", "saving", "tag"],
+      enum: ["expense", "saving", "tag", "trip"],
       required: true,
       index: true,
     },
