@@ -21,6 +21,8 @@ import { db, LocalExpense, LocalTag, LocalSaving } from "@/lib/offline/db";
 import { queueExpenseCreation, queueExpenseUpdate, queueTagCreation, queueSavingCreation, queueSavingUpdate, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useTrip } from "@/context/TripContext";
+import { GENERAL_TRIP_ID } from "@/lib/trips";
 import { formatAmountInput, parseAmountInput } from "@/lib/currency";
 import toast from "react-hot-toast";
 
@@ -52,6 +54,7 @@ export function ExpenseFormModal({
 }: ExpenseFormModalProps) {
   const { user } = useAuth();
   const { currencyInfo } = useCurrency();
+  const { activeTripId } = useTrip();
   const userId = user?.id || "local_user";
 
   const [amount, setAmount] = useState<string>("");
@@ -66,17 +69,18 @@ export function ExpenseFormModal({
   const [fromSavings, setFromSavings] = useState<boolean>(false);
   const [linkedSaving, setLinkedSaving] = useState<LocalSaving | null>(null);
 
-  // Live tags from Dexie — deduplicated by lowercase name to avoid server+local duplicates
+  // Live tags from Dexie, scoped to the active trip — deduplicated by lowercase name to avoid server+local duplicates
   const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
   const tags = useMemo(() => {
+    const tripTags = rawTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === activeTripId);
     const seen = new Set<string>();
-    return rawTags.filter((t) => {
+    return tripTags.filter((t) => {
       const key = t.name.toLowerCase().trim();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
-  }, [rawTags]);
+  }, [rawTags, activeTripId]);
 
   // Live savings balance (all-time) to display inside the modal
   const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
@@ -220,6 +224,7 @@ export function ExpenseFormModal({
         userId,
         name,
         colorKey: randomColor,
+        tripId: activeTripId,
       };
 
       await queueTagCreation(newTag);
@@ -295,6 +300,7 @@ export function ExpenseFormModal({
           createdAt: now,
           updatedAt: now,
           syncStatus: "pending",
+          tripId: activeTripId,
         };
         await queueExpenseCreation(newExpense);
 

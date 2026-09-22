@@ -36,6 +36,7 @@ import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useTrip } from "@/context/TripContext";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { db, LocalDeleteLog } from "@/lib/offline/db";
 import {
@@ -47,6 +48,7 @@ import {
 
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
+  const { activeTripId } = useTrip();
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, isDecimal, setIsDecimal, formatAmount } = useCurrency();
   const { status, pendingCount, lastSyncedAt, syncNow, isSyncing } = useAuth().syncStatus;
@@ -296,7 +298,7 @@ export default function ProfilePage() {
   const handleExcelExport = async () => {
     setIsExporting(true);
     try {
-      const res = await fetch("/api/export/excel");
+      const res = await fetch(`/api/export/excel?tripId=${encodeURIComponent(activeTripId)}`);
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);

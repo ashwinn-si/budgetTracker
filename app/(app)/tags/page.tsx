@@ -7,6 +7,8 @@ import { db, LocalTag } from "@/lib/offline/db";
 import { queueTagCreation, queueTagUpdate, queueTagDeletion, deduplicateLocalTags } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
 import { useAuth } from "@/context/AuthContext";
+import { useTrip } from "@/context/TripContext";
+import { filterExpensesForTrip, GENERAL_TRIP_ID } from "@/lib/trips";
 import toast from "react-hot-toast";
 import {
   Tags as TagsIcon,
@@ -41,6 +43,7 @@ const PRESET_COLORS = [
 export default function TagsPage() {
   const { user } = useAuth();
   const { formatAmount } = useCurrency();
+  const { trips, activeTripId, activeTrip } = useTrip();
 
   const [isCreating, setIsCreating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -61,8 +64,18 @@ export default function TagsPage() {
   }, []);
 
   // Live query from local Dexie database
-  const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
-  const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
+  const rawExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+
+  // Tags and expenses scoped to the active trip
+  const allTags = useMemo(
+    () => rawTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === activeTripId),
+    [rawTags, activeTripId]
+  );
+  const allExpenses = useMemo(
+    () => filterExpensesForTrip(rawExpenses, activeTripId, trips).own,
+    [rawExpenses, activeTripId, trips]
+  );
 
   // Compute stats per tag
   const tagStats = useMemo(() => {
@@ -123,6 +136,7 @@ export default function TagsPage() {
         userId: user?.id || "local_user",
         name: trimmed,
         colorKey: selectedColor,
+        tripId: activeTripId,
       };
 
       await queueTagCreation(newTag);
@@ -197,6 +211,12 @@ export default function TagsPage() {
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
             Tags &amp; <em>Categories</em>
           </h1>
+          {activeTripId !== GENERAL_TRIP_ID && (
+            <span className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+              {activeTrip.emoji && <span>{activeTrip.emoji}</span>}
+              <span>{activeTrip.name}</span>
+            </span>
+          )}
         </div>
 
         <Button

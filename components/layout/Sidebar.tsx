@@ -23,6 +23,7 @@ import {
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useSidebar } from "@/context/SidebarContext";
+import { TripSwitcher } from "@/components/trips/TripSwitcher";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -131,6 +132,9 @@ export function Sidebar() {
               </div>
             )}
           </div>
+
+          {/* Trip Switcher */}
+          <TripSwitcher variant="mobile" />
 
           {/* Divider */}
           <div className="h-px bg-black/5 dark:bg-white/5" />
@@ -275,6 +279,9 @@ export function Sidebar() {
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs ring-2 ring-emerald-500/20" />
                 )}
               </div>
+
+              {/* Trip Switcher (compact) */}
+              <TripSwitcher variant="compact" />
             </div>
           ) : (
             <div className="space-y-3">
@@ -329,6 +336,9 @@ export function Sidebar() {
                   </div>
                 )}
               </div>
+
+              {/* Trip Switcher */}
+              <TripSwitcher variant="desktop" />
             </div>
           )}
 

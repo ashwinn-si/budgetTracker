@@ -24,11 +24,14 @@ import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { queueExpenseDeletion, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useTrip } from "@/context/TripContext";
+import { filterExpensesForTrip, GENERAL_TRIP_ID } from "@/lib/trips";
 import { SelectSheet } from "@/components/ui/SelectSheet";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
 
 export default function ExpensesPage() {
   const { formatAmount, currencyInfo } = useCurrency();
+  const { trips, activeTripId } = useTrip();
   const searchParams = useSearchParams();
   const tagParam = searchParams.get("tag");
   const monthParam = searchParams.get("month");
@@ -53,13 +56,26 @@ export default function ExpensesPage() {
   }, [monthParam]);
 
   // Live query from Dexie
-  const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const rawExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
   const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
-  const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
+  const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
 
+  // Scoped to the active trip (own + mirrored-in expenses)
+  const allExpenses = useMemo(
+    () => filterExpensesForTrip(rawExpenses, activeTripId, trips).all,
+    [rawExpenses, activeTripId, trips]
+  );
+
+  // Tags belonging to the active trip only
+  const allTags = useMemo(
+    () => rawTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === activeTripId),
+    [rawTags, activeTripId]
+  );
+
+  // Lookup over ALL tags (across trips) so mirrored expenses keep their tag labels/colors
   const tagMap = useMemo(() => {
-    return new Map(allTags.map((t) => [t._id, t]));
-  }, [allTags]);
+    return new Map(rawTags.map((t) => [t._id, t]));
+  }, [rawTags]);
 
   const linkedWithdrawalIds = useMemo(() => {
     const ids = new Set<string>();

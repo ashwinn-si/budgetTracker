@@ -24,6 +24,8 @@ import { db, LocalExpense } from "@/lib/offline/db";
 import { useAuth } from "@/context/AuthContext";
 import { useLoading } from "@/context/LoadingContext";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useTrip } from "@/context/TripContext";
+import { filterExpensesForTrip, GENERAL_TRIP_ID } from "@/lib/trips";
 import { SpendingActivityChart } from "@/components/dashboard/SpendingActivityChart";
 import toast from "react-hot-toast";
 import { DateRangeFilter, PeriodPreset } from "@/components/dashboard/DateRangeFilter";
@@ -35,6 +37,7 @@ function DashboardContent() {
   const { syncNow, isSyncing } = useAuth().syncStatus;
   const { startLoading, stopLoading } = useLoading();
   const { formatAmount, currencyInfo } = useCurrency();
+  const { trips, activeTripId, activeTrip } = useTrip();
 
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -46,13 +49,26 @@ function DashboardContent() {
   const selectedTagsParam = searchParams.get("tags")?.split(",").filter(Boolean) || [];
 
   // Live query from Dexie IndexedDB
-  const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const rawExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
   const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
-  const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
+  const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
 
+  // Scoped to the active trip (own + mirrored-in expenses)
+  const allExpenses = useMemo(
+    () => filterExpensesForTrip(rawExpenses, activeTripId, trips).all,
+    [rawExpenses, activeTripId, trips]
+  );
+
+  // Tags belonging to the active trip only
+  const allTags = useMemo(
+    () => rawTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === activeTripId),
+    [rawTags, activeTripId]
+  );
+
+  // Lookup over ALL tags (across trips) so mirrored expenses keep their tag labels/colors
   const tagMap = useMemo(() => {
-    return new Map(allTags.map((t) => [t._id, t]));
-  }, [allTags]);
+    return new Map(rawTags.map((t) => [t._id, t]));
+  }, [rawTags]);
 
   // Compute date ranges
   const dateRanges = useMemo(() => {
@@ -244,6 +260,7 @@ function DashboardContent() {
       const queryParams = new URLSearchParams();
       queryParams.set("startDate", startStr);
       queryParams.set("endDate", endStr);
+      queryParams.set("tripId", activeTripId);
       if (selectedTagsParam.length > 0) {
         queryParams.set("tagIds", selectedTagsParam.join(","));
         const names = selectedTagsParam
@@ -296,6 +313,12 @@ function DashboardContent() {
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
             Financial <em>Pacing</em>
           </h1>
+          {activeTripId !== GENERAL_TRIP_ID && (
+            <span className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+              {activeTrip.emoji && <span>{activeTrip.emoji}</span>}
+              <span>{activeTrip.name}</span>
+            </span>
+          )}
         </div>
 
         <div className="hidden sm:flex items-center gap-2">
