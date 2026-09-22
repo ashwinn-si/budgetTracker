@@ -278,21 +278,23 @@ export function TripsCard() {
           </Button>
         </div>
 
-        <div className="space-y-2">
-          <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-            Active
-          </label>
-          <div className="space-y-2.5">{activeTrips.map(renderRow)}</div>
-        </div>
-
-        {completedTrips.length > 0 && (
-          <div className="space-y-2 pt-1 border-t border-black/5 dark:border-white/5">
-            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] pt-3">
-              Completed ({completedTrips.length})
+        <div className="max-h-[360px] overflow-y-auto custom-scrollbar p-1 -m-1 space-y-5">
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Active
             </label>
-            <div className="space-y-2.5">{completedTrips.map(renderRow)}</div>
+            <div className="space-y-2.5">{activeTrips.map(renderRow)}</div>
           </div>
-        )}
+
+          {completedTrips.length > 0 && (
+            <div className="space-y-2 pt-1 border-t border-black/5 dark:border-white/5">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] pt-3">
+                Completed ({completedTrips.length})
+              </label>
+              <div className="space-y-2.5">{completedTrips.map(renderRow)}</div>
+            </div>
+          )}
+        </div>
       </GlassCard>
 
       <TripFormModal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} trip={editingTrip || undefined} />

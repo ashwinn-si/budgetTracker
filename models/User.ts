@@ -13,6 +13,8 @@ export interface IUser extends Document {
   currency?: string;
   isSharingEnabled?: boolean;
   shareId?: string;
+  isCombinedSharingEnabled: boolean;
+  combinedShareId?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +33,8 @@ const UserSchema = new Schema<IUser>(
     currency: { type: String, default: "INR" },
     isSharingEnabled: { type: Boolean, default: false },
     shareId: { type: String, unique: true, sparse: true },
+    isCombinedSharingEnabled: { type: Boolean, default: false },
+    combinedShareId: { type: String, unique: true, sparse: true },
   },
   { timestamps: true }
 );

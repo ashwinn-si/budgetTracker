@@ -347,6 +347,73 @@ export default function ProfilePage() {
     return [...(general ? [general] : []), ...active, ...completed];
   }, [trips]);
 
+  const sharedTrips = useMemo(() => sharingTrips.filter((t) => t.isSharingEnabled), [sharingTrips]);
+
+  // Combined "all shared trips" link
+  const [combinedSharing, setCombinedSharing] = useState<{ isEnabled: boolean; shareId: string | null }>({
+    isEnabled: false,
+    shareId: null,
+  });
+  const [isCombinedToggling, setIsCombinedToggling] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCombinedSharing() {
+      try {
+        const res = await fetch("/api/user/share");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.success) {
+          setCombinedSharing({
+            isEnabled: !!data.isCombinedSharingEnabled,
+            shareId: data.combinedShareId || null,
+          });
+        }
+      } catch {
+        // Offline fallback: leave combined sharing state as-is
+      }
+    }
+    loadCombinedSharing();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleToggleCombinedSharing = async () => {
+    setIsCombinedToggling(true);
+    try {
+      const res = await fetch("/api/user/share", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scope: "all", isSharingEnabled: !combinedSharing.isEnabled }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCombinedSharing({
+          isEnabled: data.isCombinedSharingEnabled,
+          shareId: data.combinedShareId || null,
+        });
+        toast.success(
+          data.isCombinedSharingEnabled ? "Combined link enabled" : "Combined link disabled"
+        );
+      } else {
+        toast.error(data.error || "Failed to update combined sharing.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Network error.");
+    } finally {
+      setIsCombinedToggling(false);
+    }
+  };
+
+  const handleCopyCombinedLink = () => {
+    if (combinedSharing.shareId) {
+      navigator.clipboard.writeText(`${window.location.origin}/share/${combinedSharing.shareId}`);
+      toast.success("Link copied!");
+    }
+  };
+
   const handleToggleTripSharing = async (trip: LocalTrip) => {
     setSharingTripId(trip.tripId);
     try {
@@ -1055,7 +1122,83 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">All shared trips</span>
+                    <span className="text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 shrink-0">
+                      Combined
+                    </span>
+                  </div>
+                  <p
+                    className="text-xs text-[var(--text-muted)] mt-0.5"
+                    title="Disabling an individual trip's sharing below automatically removes it from this link."
+                  >
+                    One link for every trip you share below ({sharedTrips.length} trip{sharedTrips.length === 1 ? "" : "s"})
+                  </p>
+                </div>
+                <Button
+                  variant={combinedSharing.isEnabled ? "ghost" : "primary"}
+                  size="sm"
+                  onClick={handleToggleCombinedSharing}
+                  isLoading={isCombinedToggling}
+                  className={
+                    combinedSharing.isEnabled
+                      ? "text-rose-600 border-rose-500/30 hover:bg-rose-500/10 shrink-0"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+                  }
+                >
+                  {combinedSharing.isEnabled ? "Disable" : "Enable"}
+                </Button>
+              </div>
+
+              {combinedSharing.isEnabled && combinedSharing.shareId && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 p-2.5 rounded-xl bg-white/60 dark:bg-black/40 border border-black/10 dark:border-white/10 text-xs font-mono text-[var(--text-primary)] truncate select-all">
+                      {typeof window !== "undefined"
+                        ? `${window.location.origin}/share/${combinedSharing.shareId}`
+                        : `/share/${combinedSharing.shareId}`}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyCombinedLink}
+                      icon={<Copy className="w-4 h-4" />}
+                      className="shrink-0"
+                    >
+                      Copy
+                    </Button>
+                  </div>
+
+                  {sharedTrips.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {sharedTrips.map((trip) => (
+                        <span
+                          key={trip.tripId}
+                          className="inline-flex items-center gap-1 rounded-full font-medium border px-2 py-0.5 text-[10px]"
+                          style={{
+                            backgroundColor: `${trip.colorKey || "#22C55E"}1F`,
+                            borderColor: `${trip.colorKey || "#22C55E"}40`,
+                            color: trip.colorKey || "#22C55E",
+                          }}
+                        >
+                          <span>{trip.emoji || (trip.tripId === GENERAL_TRIP_ID ? "💼" : "✈️")}</span>
+                          <span className="truncate max-w-[120px]">{trip.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Enable sharing on at least one trip below.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="space-y-3 max-h-[360px] overflow-y-auto custom-scrollbar p-1 -m-1">
               {sharingTrips.map((trip) => (
                 <div
                   key={trip.tripId}
@@ -1247,7 +1390,7 @@ export default function ProfilePage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
+          <div className="space-y-2.5 max-h-[480px] overflow-y-auto custom-scrollbar p-1 -m-1">
             {sortedDeleteLogs.map((log) => {
               const isExpense = log.entityType === "expense";
               const isSaving = log.entityType === "saving";

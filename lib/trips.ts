@@ -59,6 +59,19 @@ export function generateTripId(): string {
   return `trip_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 }
 
+// General first, then active trips, then completed trips, each group ordered by creation time.
+export function sortTripsForCombinedShare<T extends TripLike & { createdAt?: Date | string }>(
+  trips: T[]
+): T[] {
+  const byCreatedAt = (a: T, b: T) =>
+    new Date(a.createdAt || 0).getTime() - new Date(b.createdAt || 0).getTime();
+  const general = trips.filter((t) => t.tripId === GENERAL_TRIP_ID);
+  const others = trips.filter((t) => t.tripId !== GENERAL_TRIP_ID);
+  const active = others.filter((t) => t.status !== "completed").sort(byCreatedAt);
+  const completed = others.filter((t) => t.status === "completed").sort(byCreatedAt);
+  return [...general, ...active, ...completed];
+}
+
 // False for the same trip, or if the target already mirrors into the source (would create a 2-cycle).
 export function canMirrorInto(trips: TripLike[], sourceTripId: string, targetTripId: string): boolean {
   if (sourceTripId === targetTripId) return false;
