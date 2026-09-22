@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 import { LoadingProvider } from "@/context/LoadingContext";
 import { AuthProvider } from "@/context/AuthContext";
 import { CurrencyProvider } from "@/context/CurrencyContext";
+import { TripProvider } from "@/context/TripContext";
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(
@@ -25,9 +26,11 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <LoadingProvider>
         <AuthProvider>
           <CurrencyProvider>
-            <QueryClientProvider client={queryClient}>
-              {children}
-            </QueryClientProvider>
+            <TripProvider>
+              <QueryClientProvider client={queryClient}>
+                {children}
+              </QueryClientProvider>
+            </TripProvider>
           </CurrencyProvider>
         </AuthProvider>
       </LoadingProvider>

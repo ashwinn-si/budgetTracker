@@ -1,4 +1,5 @@
-import { db, cleanUpLegacyDefaultTags, LocalExpense, LocalTag, LocalSaving, SyncQueueItem, LocalDeleteLog } from "./db";
+import { db, cleanUpLegacyDefaultTags, ensureLocalGeneralTrip, LocalExpense, LocalTag, LocalSaving, LocalTrip, SyncQueueItem, LocalDeleteLog } from "./db";
+import { GENERAL_TRIP_ID } from "@/lib/trips";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -428,6 +429,7 @@ export async function queueTagDeletion(tagId: string) {
     payload: {
       tagId,
       name: tagName,
+      tripId: tag?.tripId || GENERAL_TRIP_ID,
       ...(tag ? { deleteSnapshot: { ...tag, affectedExpenseIds: affectedExpenseClientIds } } : {}),
     },
     createdAt: Date.now(),
@@ -443,6 +445,154 @@ export async function queueTagDeletion(tagId: string) {
   if (!ok) {
     await db.syncQueue.add(item);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Trip queue helpers
+// ---------------------------------------------------------------------------
+
+export async function queueTripCreation(
+  trip: LocalTrip,
+  opts?: { copyTagsFromTripId?: string }
+): Promise<void> {
+  await db.trips.put(trip);
+
+  const item: SyncQueueItem = {
+    clientId: trip.tripId,
+    action: "create",
+    entity: "trip",
+    payload: { ...trip },
+    createdAt: Date.now(),
+  };
+
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+  } else {
+    const ok = await executeDirectSync(item);
+    if (!ok) {
+      await db.syncQueue.add(item);
+    }
+  }
+
+  if (opts?.copyTagsFromTripId) {
+    const sourceTripId = opts.copyTagsFromTripId;
+    const allTags = await db.tags.toArray();
+    const sourceTags = allTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === sourceTripId);
+    for (const sourceTag of sourceTags) {
+      const newTag: LocalTag = {
+        _id: `tag_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        userId: sourceTag.userId,
+        name: sourceTag.name,
+        colorKey: sourceTag.colorKey,
+        tripId: trip.tripId,
+      };
+      await queueTagCreation(newTag);
+    }
+  }
+}
+
+export async function queueTripUpdate(trip: LocalTrip): Promise<void> {
+  await db.trips.put(trip);
+
+  const item: SyncQueueItem = {
+    clientId: trip.tripId,
+    action: "update",
+    entity: "trip",
+    payload: { ...trip },
+    createdAt: Date.now(),
+  };
+
+  const isOnline = typeof window !== "undefined" && navigator.onLine;
+  if (!isOnline) {
+    await db.syncQueue.add(item);
+    return;
+  }
+
+  const ok = await executeDirectSync(item);
+  if (!ok) {
+    await db.syncQueue.add(item);
+  }
+}
+
+export async function queueTripDeletion(tripId: string): Promise<boolean> {
+  if (tripId === GENERAL_TRIP_ID) return false;
+
+  const trip = await db.trips.get(tripId);
+  if (!trip) return false;
+
+  const allTags = await db.tags.toArray();
+  const tripTags = allTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === tripId);
+  const allExpenses = await db.expenses.toArray();
+  const tripExpenses = allExpenses.filter((e) => (e.tripId || GENERAL_TRIP_ID) === tripId);
+
+  // A trip whose create never synced has nothing on the server to delete; the local log still allows recovery.
+  const pendingQueueItems = await db.syncQueue.toArray();
+  const hadPendingCreate = pendingQueueItems.some(
+    (q) => q.entity === "trip" && q.action === "create" && q.clientId === tripId
+  );
+
+  const idsToRemove = pendingQueueItems
+    .filter((q) => {
+      if (q.entity === "trip" && q.clientId === tripId) return true;
+      if ((q.entity === "expense" || q.entity === "tag") && q.payload?.tripId === tripId) return true;
+      return false;
+    })
+    .map((q) => q.id)
+    .filter((id): id is number => id !== undefined);
+  if (idsToRemove.length > 0) {
+    await db.syncQueue.bulkDelete(idsToRemove);
+  }
+
+  const logId = `del_trip_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const deleteLogItem: LocalDeleteLog = {
+    id: logId,
+    userId: trip.userId,
+    entityType: "trip",
+    entityId: tripId,
+    title: trip.name,
+    details: `Trip • ${tripExpenses.length} expenses • ${tripTags.length} categories`,
+    data: { trip, tags: tripTags, expenses: tripExpenses },
+    deletedAt: new Date().toISOString(),
+    syncStatus: "pending",
+  };
+  await db.deleteLogs.put(deleteLogItem);
+
+  for (const exp of tripExpenses) {
+    await db.expenses.delete(exp.clientId);
+  }
+  for (const tag of tripTags) {
+    await db.tags.delete(tag._id);
+  }
+  await db.trips.delete(tripId);
+
+  await db.trips.toCollection().modify((t) => {
+    if (Array.isArray(t.mirrorToTripIds) && t.mirrorToTripIds.includes(tripId)) {
+      t.mirrorToTripIds = t.mirrorToTripIds.filter((id) => id !== tripId);
+    }
+  });
+
+  if (!hadPendingCreate) {
+    const item: SyncQueueItem = {
+      clientId: tripId,
+      action: "delete",
+      entity: "trip",
+      payload: { tripId },
+      createdAt: Date.now(),
+    };
+
+    const isOnline = typeof window !== "undefined" && navigator.onLine;
+    if (!isOnline) {
+      await db.syncQueue.add(item);
+    } else {
+      const ok = await executeDirectSync(item);
+      if (!ok) {
+        await db.syncQueue.add(item);
+      }
+    }
+  }
+
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -469,11 +619,19 @@ export async function recoverDeletedItem(logId: string): Promise<{ success: bool
 
     const { entityType, data, entityId } = log;
 
+    const resolveTripId = async (tripId?: string | null): Promise<string> => {
+      const id = tripId || GENERAL_TRIP_ID;
+      if (id === GENERAL_TRIP_ID) return GENERAL_TRIP_ID;
+      const existingTrip = await db.trips.get(id);
+      return existingTrip ? id : GENERAL_TRIP_ID;
+    };
+
     if (entityType === "expense") {
       const exp = data as unknown as LocalExpense;
       const restoredExp: LocalExpense = {
         ...exp,
         clientId: exp.clientId || entityId,
+        tripId: await resolveTripId(exp.tripId),
         syncStatus: "pending",
         updatedAt: new Date().toISOString(),
       };
@@ -492,6 +650,7 @@ export async function recoverDeletedItem(logId: string): Promise<{ success: bool
       const restoredTag: LocalTag = {
         ...tag,
         _id: tag._id || entityId,
+        tripId: await resolveTripId(tag.tripId),
       };
       await queueTagCreation(restoredTag);
 
@@ -508,6 +667,30 @@ export async function recoverDeletedItem(logId: string): Promise<{ success: bool
             }
           }
         }
+      }
+    } else if (entityType === "trip") {
+      const snapshot = data as unknown as {
+        trip: LocalTrip;
+        tags?: LocalTag[];
+        expenses?: LocalExpense[];
+      };
+      const trip = snapshot.trip;
+      const restoredTrip: LocalTrip = {
+        ...trip,
+        tripId: trip.tripId || entityId,
+      };
+      await queueTripCreation(restoredTrip);
+
+      for (const tag of snapshot.tags || []) {
+        await queueTagCreation({ ...tag, tripId: restoredTrip.tripId });
+      }
+      for (const exp of snapshot.expenses || []) {
+        await queueExpenseCreation({
+          ...exp,
+          tripId: restoredTrip.tripId,
+          syncStatus: "pending",
+          updatedAt: new Date().toISOString(),
+        });
       }
     }
 
@@ -585,11 +768,12 @@ export async function deduplicateLocalTags(): Promise<void> {
     const allTags = await db.tags.toArray();
     if (allTags.length <= 1) return;
 
-    // Group by trimmed, lowercase name
+    // Group by trip + trimmed, lowercase name
     const byName = new Map<string, LocalTag[]>();
     for (const tag of allTags) {
-      const key = (tag.name || "").trim().toLowerCase();
-      if (!key) continue;
+      const name = (tag.name || "").trim().toLowerCase();
+      if (!name) continue;
+      const key = `${tag.tripId || GENERAL_TRIP_ID}|${name}`;
       if (!byName.has(key)) byName.set(key, []);
       byName.get(key)!.push(tag);
     }
@@ -784,6 +968,60 @@ export async function pullFromServer(
   try {
     await deduplicateLocalTags();
 
+    // 0. Pull trips first, so tags/expenses can be reconciled against known trip ids
+    let tripsRes = await fetch("/api/trips", { headers });
+    if (tripsRes.status === 401) {
+      const refreshedToken = await refreshAccessToken();
+      if (refreshedToken) {
+        currentToken = refreshedToken;
+        headers = buildAuthHeaders(currentToken);
+        tripsRes = await fetch("/api/trips", { headers });
+      }
+    }
+    let localUserId: string | undefined;
+    if (tripsRes.ok) {
+      const tripsData = await tripsRes.json();
+      if (Array.isArray(tripsData.trips)) {
+        const serverTrips = tripsData.trips as Record<string, unknown>[];
+        const localTrips: LocalTrip[] = serverTrips.map((t) => {
+          const userId = (t.userId as string) || "local_user";
+          localUserId = userId;
+          return {
+            tripId: t.tripId as string,
+            _id: (t._id as { toString(): string })?.toString() ?? (t._id ? String(t._id) : undefined),
+            userId,
+            name: (t.name as string) || "Trip",
+            emoji: (t.emoji as string) || "",
+            colorKey: (t.colorKey as string) || "#22C55E",
+            isDefault: Boolean(t.isDefault),
+            status: (t.status as "active" | "completed") || "active",
+            completedAt: t.completedAt ? new Date(t.completedAt as string).toISOString() : null,
+            mirrorToTripIds: Array.isArray(t.mirrorToTripIds) ? (t.mirrorToTripIds as string[]) : [],
+            startDate: t.startDate ? new Date(t.startDate as string).toISOString() : null,
+            endDate: t.endDate ? new Date(t.endDate as string).toISOString() : null,
+            isSharingEnabled: Boolean(t.isSharingEnabled),
+            shareId: (t.shareId as string) || null,
+            createdAt: t.createdAt ? new Date(t.createdAt as string).toISOString() : undefined,
+            updatedAt: t.updatedAt ? new Date(t.updatedAt as string).toISOString() : undefined,
+          };
+        });
+        await db.trips.bulkPut(localTrips);
+
+        const serverTripIds = new Set(localTrips.map((t) => t.tripId));
+        const pendingTripItems = await db.syncQueue.where("entity").equals("trip").toArray();
+        const pendingTripIds = new Set(pendingTripItems.map((p) => p.clientId));
+        const currentLocalTrips = await db.trips.toArray();
+        for (const lt of currentLocalTrips) {
+          if (!serverTripIds.has(lt.tripId) && !pendingTripIds.has(lt.tripId)) {
+            await db.trips.delete(lt.tripId);
+          }
+        }
+      }
+    }
+    if (localUserId) {
+      await ensureLocalGeneralTrip(localUserId);
+    }
+
     // 1. Pull tags with reconciliation
     let tagsRes = await fetch("/api/tags", { headers });
     if (tagsRes.status === 401) {
@@ -804,11 +1042,12 @@ export async function pullFromServer(
           const sId = (sTag._id as { toString(): string })?.toString() ?? String(sTag._id);
           const sName = (sTag.name as string || "").trim().toLowerCase();
           const sClientId = sTag.clientId as string | undefined;
+          const sTripId = (sTag.tripId as string) || GENERAL_TRIP_ID;
 
-          // Check if an existing local tag has a different _id but matches by name or clientId
+          // Check if an existing local tag has a different _id but matches by name+trip or clientId
           const matchingLocal = existingLocalTags.find(
             (lt) => lt._id !== sId && (
-              (lt.name && lt.name.trim().toLowerCase() === sName) ||
+              (lt.name && lt.name.trim().toLowerCase() === sName && (lt.tripId || GENERAL_TRIP_ID) === sTripId) ||
               (sClientId && lt._id === sClientId)
             )
           );
@@ -844,6 +1083,7 @@ export async function pullFromServer(
           userId: (t.userId as string) || "local_user",
           name: t.name as string,
           colorKey: (t.colorKey as string) || "#22C55E",
+          tripId: (t.tripId as string) || GENERAL_TRIP_ID,
         }));
         await db.tags.bulkPut(localTags);
 
@@ -911,6 +1151,7 @@ export async function pullFromServer(
                 ? new Date(sExp.updatedAt).toISOString()
                 : new Date().toISOString(),
               syncStatus: "synced",
+              tripId: (sExp.tripId as string) || GENERAL_TRIP_ID,
             };
             await db.expenses.put(localExp);
           }

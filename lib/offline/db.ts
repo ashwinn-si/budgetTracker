@@ -6,6 +6,7 @@ export interface LocalTag {
   name: string;
   colorKey: string;
   createdAt?: string;
+  tripId?: string;
 }
 
 export interface LocalExpense {
@@ -19,6 +20,26 @@ export interface LocalExpense {
   createdAt: string;
   updatedAt: string;
   syncStatus: "synced" | "syncing" | "pending" | "conflict";
+  tripId?: string;
+}
+
+export interface LocalTrip {
+  tripId: string;
+  _id?: string;
+  userId: string;
+  name: string;
+  emoji: string;
+  colorKey: string;
+  isDefault: boolean;
+  status: "active" | "completed";
+  completedAt?: string | null;
+  mirrorToTripIds: string[];
+  startDate?: string | null;
+  endDate?: string | null;
+  isSharingEnabled?: boolean;
+  shareId?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface LocalSaving {
@@ -39,7 +60,7 @@ export interface LocalDeleteLog {
   id: string; // unique UUID or timestamp-based ID
   _id?: string; // MongoDB ObjectId if synced
   userId: string;
-  entityType: "expense" | "saving" | "tag";
+  entityType: "expense" | "saving" | "tag" | "trip";
   entityId: string;
   title: string;
   details?: string;
@@ -52,7 +73,7 @@ export interface SyncQueueItem {
   id?: number;
   clientId: string;
   action: "create" | "update" | "delete";
-  entity: "expense" | "tag" | "saving";
+  entity: "expense" | "tag" | "saving" | "trip";
   payload: Record<string, unknown>;
   createdAt: number;
 }
@@ -63,6 +84,7 @@ export class BudgetDatabase extends Dexie {
   savings!: Table<LocalSaving, string>;
   syncQueue!: Table<SyncQueueItem, number>;
   deleteLogs!: Table<LocalDeleteLog, string>;
+  trips!: Table<LocalTrip, string>;
 
   constructor() {
     super("BudgetTrackerDB");
@@ -92,6 +114,42 @@ export class BudgetDatabase extends Dexie {
       syncQueue: "++id, clientId, entity, action, createdAt",
       deleteLogs: "id, userId, entityType, deletedAt",
     });
+    // v5: adds trips table and tripId indexes on expenses/tags for Trip mode
+    this.version(5)
+      .stores({
+        expenses: "clientId, _id, userId, tripId, date, syncStatus, *tagIds",
+        tags: "_id, userId, tripId, name, [tripId+name]",
+        savings: "clientId, _id, userId, date, syncStatus, linkedExpenseId",
+        syncQueue: "++id, clientId, entity, action, createdAt",
+        deleteLogs: "id, userId, entityType, deletedAt",
+        trips: "tripId, userId, status",
+      })
+      .upgrade(async (tx) => {
+        await tx
+          .table("expenses")
+          .toCollection()
+          .modify((exp: LocalExpense) => {
+            if (!exp.tripId) exp.tripId = "general";
+          });
+        await tx
+          .table("tags")
+          .toCollection()
+          .modify((tag: LocalTag) => {
+            if (!tag.tripId) tag.tripId = "general";
+          });
+        await tx
+          .table("syncQueue")
+          .toCollection()
+          .modify((item: SyncQueueItem) => {
+            if (
+              (item.entity === "expense" || item.entity === "tag") &&
+              item.payload &&
+              !item.payload.tripId
+            ) {
+              item.payload.tripId = "general";
+            }
+          });
+      });
   }
 }
 
@@ -172,8 +230,31 @@ export async function clearLocalUserData() {
     await db.savings.clear();
     await db.syncQueue.clear();
     await db.deleteLogs.clear();
+    await db.trips.clear();
   } catch (err) {
     console.error("Failed to clear local user data:", err);
+  }
+}
+
+// Ensure the built-in General trip exists locally (protects users created before a pull completes)
+export async function ensureLocalGeneralTrip(userId: string) {
+  if (typeof window === "undefined") return;
+  try {
+    const existing = await db.trips.get("general");
+    if (existing) return;
+    const generalTrip: LocalTrip = {
+      tripId: "general",
+      userId,
+      name: "General",
+      emoji: "",
+      colorKey: "#22C55E",
+      isDefault: true,
+      status: "active",
+      mirrorToTripIds: [],
+    };
+    await db.trips.put(generalTrip);
+  } catch (err) {
+    console.error("Failed to ensure local General trip:", err);
   }
 }
 
