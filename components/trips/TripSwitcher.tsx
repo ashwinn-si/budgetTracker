@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronDown, ChevronRight, Wallet, Plane } from "lucide-react";
 import toast from "react-hot-toast";
@@ -29,6 +29,24 @@ export function TripSwitcher({ variant, className = "" }: TripSwitcherProps) {
   const { trips, activeTrips, completedTrips, activeTripId, activeTrip, setActiveTrip, getTrip } = useTrip();
   const [isOpen, setIsOpen] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isDropdown = variant !== "mobile";
+
+  useEffect(() => {
+    if (!isOpen || !isDropdown) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setIsOpen(false);
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsOpen(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, isDropdown]);
 
   const hasOtherActiveTrips = activeTrips.some((t) => t.tripId !== GENERAL_TRIP_ID);
   const hasOtherTrips = trips.some((t) => t.tripId !== GENERAL_TRIP_ID);
@@ -78,9 +96,8 @@ export function TripSwitcher({ variant, className = "" }: TripSwitcherProps) {
     </button>
   );
 
-  const modal = (
-    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Switch trip" maxWidth="sm">
-      <div className="max-h-[50vh] overflow-y-auto custom-scrollbar -mx-2 px-2 space-y-1">
+  const listContent = (
+      <div className={isDropdown ? "max-h-[50vh] overflow-y-auto custom-scrollbar space-y-1" : "max-h-[50vh] overflow-y-auto custom-scrollbar -mx-2 px-2 space-y-1"}>
         {variant === "mobile" ? (
           <>
             {isViewingCompleted && (
@@ -133,7 +150,9 @@ export function TripSwitcher({ variant, className = "" }: TripSwitcherProps) {
           </>
         )}
       </div>
+  );
 
+  const manageButton = (
       <button
         type="button"
         onClick={handleManageTrips}
@@ -141,23 +160,44 @@ export function TripSwitcher({ variant, className = "" }: TripSwitcherProps) {
       >
         Manage trips
       </button>
+  );
+
+  const dropdownPanel = isOpen && (
+    <div
+      role="listbox"
+      aria-label="Switch trip"
+      className={`absolute z-50 glass-strong backdrop-blur-2xl border border-white/60 dark:border-white/10 rounded-2xl shadow-2xl p-2 ${
+        variant === "compact" ? "left-full top-0 ml-3 w-64" : "left-0 right-0 top-full mt-2"
+      }`}
+    >
+      {listContent}
+      {manageButton}
+    </div>
+  );
+
+  const modal = (
+    <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title="Switch trip" maxWidth="sm">
+      {listContent}
+      {manageButton}
     </Modal>
   );
 
   if (variant === "compact") {
     return (
-      <>
+      <div ref={containerRef} className="relative">
         <button
           type="button"
-          onClick={() => setIsOpen(true)}
+          onClick={() => setIsOpen((v) => !v)}
+          aria-expanded={isOpen}
+          aria-haspopup="listbox"
           title={activeTrip.name}
           aria-label={`Switch trip (current: ${activeTrip.name})`}
           className={`w-12 h-12 mx-auto flex items-center justify-center rounded-2xl text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/10 transition-all cursor-pointer ${className}`}
         >
           <TripIcon trip={activeTrip} className="w-5 h-5" />
         </button>
-        {modal}
-      </>
+        {dropdownPanel}
+      </div>
     );
   }
 
@@ -180,19 +220,21 @@ export function TripSwitcher({ variant, className = "" }: TripSwitcherProps) {
 
   // desktop
   return (
-    <>
+    <div ref={containerRef} className="relative">
       <button
         type="button"
-        onClick={() => setIsOpen(true)}
+        onClick={() => setIsOpen((v) => !v)}
+        aria-expanded={isOpen}
+        aria-haspopup="listbox"
         className={`w-full flex items-center justify-between px-4 py-2.5 text-xs sm:text-sm font-medium bg-white/60 dark:bg-black/40 border border-white/60 dark:border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 text-[var(--text-primary)] cursor-pointer hover:bg-white/80 dark:hover:bg-black/60 transition-all shadow-xs ${className}`}
       >
         <span className="flex items-center gap-2 min-w-0">
           <TripIcon trip={activeTrip} className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
           <span className="truncate">{activeTrip.name}</span>
         </span>
-        <ChevronDown className="w-4 h-4 shrink-0 text-[var(--text-muted)]" />
+        <ChevronDown className={`w-4 h-4 shrink-0 text-[var(--text-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
       </button>
-      {modal}
-    </>
+      {dropdownPanel}
+    </div>
   );
 }
