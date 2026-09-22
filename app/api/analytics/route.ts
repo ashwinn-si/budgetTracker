@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
 import { Tag } from "@/models/Tag";
+import { Trip } from "@/models/Trip";
 import { getCurrentUser } from "@/lib/auth";
+import { GENERAL_TRIP_ID, getVisibleTripIds, tripIdMatchValues } from "@/lib/trips";
 
 export async function GET(req: NextRequest) {
   try {
@@ -13,6 +16,7 @@ export async function GET(req: NextRequest) {
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
     const tagIds = searchParams.get("tagIds")?.split(",").filter(Boolean);
+    const tripId = searchParams.get("tripId") || GENERAL_TRIP_ID;
 
     const now = new Date();
     const startDate = startDateParam
@@ -49,9 +53,21 @@ export async function GET(req: NextRequest) {
       date: { $gte: prevStartDate, $lte: prevEndDate },
     };
 
+    const userTrips = await Trip.find({ userId }).lean();
+    const visibleTripIds = tripIdMatchValues(getVisibleTripIds(userTrips, tripId));
+    currentMatch.tripId = { $in: visibleTripIds };
+    prevMatch.tripId = { $in: visibleTripIds };
+
     if (tagIds && tagIds.length > 0) {
-      currentMatch.tagIds = { $in: tagIds };
-      prevMatch.tagIds = { $in: tagIds };
+      // Cast valid 24-hex ids to ObjectId — tagIds is stored as ObjectId in Expense.tagIds,
+      // so a raw string $in match here silently matched nothing.
+      const tagObjectIds = tagIds
+        .filter((tid) => mongoose.Types.ObjectId.isValid(tid) && /^[a-f\d]{24}$/i.test(tid))
+        .map((tid) => new mongoose.Types.ObjectId(tid));
+      if (tagObjectIds.length > 0) {
+        currentMatch.tagIds = { $in: tagObjectIds };
+        prevMatch.tagIds = { $in: tagObjectIds };
+      }
     }
 
     // 1. Current period total

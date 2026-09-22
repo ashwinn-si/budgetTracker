@@ -5,7 +5,9 @@ import { DeleteLog } from "@/models/DeleteLog";
 import { Expense } from "@/models/Expense";
 import { Saving } from "@/models/Saving";
 import { Tag } from "@/models/Tag";
+import { Trip } from "@/models/Trip";
 import { getCurrentUser } from "@/lib/auth";
+import { GENERAL_TRIP_ID, tripIdFilter } from "@/lib/trips";
 
 export async function POST(req: NextRequest) {
   try {
@@ -56,11 +58,20 @@ export async function POST(req: NextRequest) {
     const data = (log.data || {}) as Record<string, unknown>;
     const entityType = log.entityType;
 
+    // If the trip the item belonged to no longer exists for this user, fall back to General.
+    async function resolveTripId(): Promise<string> {
+      const rawTripId = typeof data.tripId === "string" && data.tripId ? data.tripId : GENERAL_TRIP_ID;
+      if (rawTripId === GENERAL_TRIP_ID) return GENERAL_TRIP_ID;
+      const exists = await Trip.exists({ userId, tripId: rawTripId });
+      return exists ? rawTripId : GENERAL_TRIP_ID;
+    }
+
     if (entityType === "expense") {
       const clientId = (data.clientId as string) || log.entityId;
       const amount = Number(data.amount) || 0;
       const note = typeof data.note === "string" ? data.note.trim() : "";
       const date = data.date ? new Date(data.date as string) : new Date();
+      const tripId = await resolveTripId();
 
       // Resolve tagIds
       const resolvedTagIds: mongoose.Types.ObjectId[] = [];
@@ -79,6 +90,7 @@ export async function POST(req: NextRequest) {
         note,
         tagIds: resolvedTagIds,
         date,
+        tripId,
         syncStatus: "synced",
         updatedAt: new Date(),
       };
@@ -113,14 +125,16 @@ export async function POST(req: NextRequest) {
       const name = typeof data.name === "string" ? data.name.trim() : log.title;
       const colorKey = typeof data.colorKey === "string" ? data.colorKey : "#22C55E";
       const clientId = (data.clientId as string) || (typeof data._id === "string" ? data._id : log.entityId);
+      const tripId = await resolveTripId();
 
       const tag = await Tag.findOneAndUpdate(
-        { name, userId },
+        { name, userId, tripId: tripIdFilter(tripId) },
         {
           $set: {
             userId,
             name,
             colorKey,
+            tripId,
             ...(clientId ? { clientId } : {}),
           },
         },
@@ -139,6 +153,12 @@ export async function POST(req: NextRequest) {
           );
         }
       }
+    } else if (entityType === "trip") {
+      // Restoring a whole trip (its own doc, tags, and expenses) is a later phase.
+      return NextResponse.json(
+        { error: "Trip recovery is not supported yet." },
+        { status: 400 }
+      );
     }
 
     // Remove the delete log entry once recovered

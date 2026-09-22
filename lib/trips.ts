@@ -20,6 +20,15 @@ export function getVisibleTripIds(trips: TripLike[], targetTripId: string): stri
   return [targetTripId, ...getSourceTripIds(trips, targetTripId)];
 }
 
+// Values for a Mongo `tripId: {$in}` match; null also matches docs not yet backfilled by the migration (= General).
+export function tripIdMatchValues(tripIds: string[]): (string | null)[] {
+  return tripIds.includes(GENERAL_TRIP_ID) ? [...tripIds, null] : tripIds;
+}
+
+export function tripIdFilter(tripId: string): string | { $in: (string | null)[] } {
+  return tripId === GENERAL_TRIP_ID ? { $in: [GENERAL_TRIP_ID, null] } : tripId;
+}
+
 export function filterExpensesForTrip<T extends { tripId?: string }>(
   expenses: T[],
   targetTripId: string,

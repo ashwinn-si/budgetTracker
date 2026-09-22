@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/db";
 import { Expense } from "@/models/Expense";
 import { DeleteLog } from "@/models/DeleteLog";
+import { Trip } from "@/models/Trip";
 import { getCurrentUser } from "@/lib/auth";
+import { GENERAL_TRIP_ID, getVisibleTripIds, tripIdMatchValues } from "@/lib/trips";
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,6 +16,7 @@ export async function GET(req: NextRequest) {
     const endDate = searchParams.get("endDate");
     const tagIds = searchParams.get("tagIds")?.split(",").filter(Boolean);
     const search = searchParams.get("search");
+    const tripId = searchParams.get("tripId");
 
     const db = await connectToDatabase();
     if (!db) {
@@ -23,6 +26,12 @@ export async function GET(req: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filter: any = { userId };
+
+    // Absent tripId keeps returning everything — the offline pull relies on this.
+    if (tripId) {
+      const userTrips = await Trip.find({ userId }).lean();
+      filter.tripId = { $in: tripIdMatchValues(getVisibleTripIds(userTrips, tripId)) };
+    }
 
     if (startDate || endDate) {
       filter.date = {};
@@ -55,7 +64,8 @@ export async function POST(req: NextRequest) {
     const user = await getCurrentUser(req);
     const userId = user?.userId || "local_user";
 
-    const { amount, note, tagIds, date, clientId } = await req.json();
+    const { amount, note, tagIds, date, clientId, tripId } = await req.json();
+    const effectiveTripId = typeof tripId === "string" && tripId ? tripId : GENERAL_TRIP_ID;
 
     if (amount === undefined || isNaN(Number(amount))) {
       return NextResponse.json({ error: "Valid amount is required" }, { status: 400 });
@@ -72,6 +82,7 @@ export async function POST(req: NextRequest) {
           tagIds: tagIds || [],
           date: date ? new Date(date).toISOString() : new Date().toISOString(),
           clientId: clientId || `client_${Date.now()}`,
+          tripId: effectiveTripId,
           syncStatus: "synced",
         },
       });
@@ -84,6 +95,7 @@ export async function POST(req: NextRequest) {
       tagIds: tagIds || [],
       date: date ? new Date(date) : new Date(),
       clientId,
+      tripId: effectiveTripId,
       syncStatus: "synced",
     });
 
@@ -99,7 +111,7 @@ export async function PUT(req: NextRequest) {
     const user = await getCurrentUser(req);
     const userId = user?.userId || "local_user";
 
-    const { id, clientId, amount, note, tagIds, date } = await req.json();
+    const { id, clientId, amount, note, tagIds, date, tripId } = await req.json();
 
     const db = await connectToDatabase();
     if (!db) {
@@ -117,6 +129,7 @@ export async function PUT(req: NextRequest) {
     if (note !== undefined) expense.note = note.trim();
     if (tagIds !== undefined) expense.tagIds = tagIds;
     if (date !== undefined) expense.date = new Date(date);
+    if (tripId !== undefined) expense.tripId = tripId;
 
     await expense.save();
     return NextResponse.json({ expense });
