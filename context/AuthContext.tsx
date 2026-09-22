@@ -174,6 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("budget_local_user");
     localStorage.removeItem("budget_active_user_id");
     localStorage.removeItem("budget_last_synced");
+    localStorage.removeItem("budget_active_trip_id");
     persistAccessToken(null);
     await clearLocalUserData();
 

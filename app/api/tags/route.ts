@@ -5,6 +5,7 @@ import { Tag } from "@/models/Tag";
 import { Expense } from "@/models/Expense";
 import { DeleteLog } from "@/models/DeleteLog";
 import { getCurrentUser } from "@/lib/auth";
+import { GENERAL_TRIP_ID, tripIdFilter } from "@/lib/trips";
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,7 +52,8 @@ export async function POST(req: NextRequest) {
     const user = await getCurrentUser(req);
     const userId = user?.userId || "local_user";
 
-    const { name, colorKey } = await req.json();
+    const { name, colorKey, tripId } = await req.json();
+    const effectiveTripId = typeof tripId === "string" && tripId ? tripId : GENERAL_TRIP_ID;
 
     if (!name || !name.trim()) {
       return NextResponse.json({ error: "Tag name is required" }, { status: 400 });
@@ -65,12 +67,13 @@ export async function POST(req: NextRequest) {
           userId,
           name: name.trim(),
           colorKey: colorKey || "#22C55E",
+          tripId: effectiveTripId,
           expenseCount: 0,
         },
       });
     }
 
-    const existing = await Tag.findOne({ userId, name: name.trim() });
+    const existing = await Tag.findOne({ userId, tripId: tripIdFilter(effectiveTripId), name: name.trim() });
     if (existing) {
       return NextResponse.json({ error: "A tag with this name already exists" }, { status: 409 });
     }
@@ -79,6 +82,7 @@ export async function POST(req: NextRequest) {
       userId,
       name: name.trim(),
       colorKey: colorKey || "#22C55E",
+      tripId: effectiveTripId,
     });
 
     return NextResponse.json({
@@ -87,6 +91,7 @@ export async function POST(req: NextRequest) {
         userId: tag.userId,
         name: tag.name,
         colorKey: tag.colorKey,
+        tripId: tag.tripId,
         expenseCount: 0,
       },
     });
@@ -127,6 +132,7 @@ export async function PUT(req: NextRequest) {
       const trimmed = name.trim();
       const duplicate = await Tag.findOne({
         userId,
+        tripId: tripIdFilter(tag.tripId || GENERAL_TRIP_ID),
         name: { $regex: new RegExp(`^${trimmed.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&")}$`, "i") },
         _id: { $ne: tag._id },
       });

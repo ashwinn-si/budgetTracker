@@ -255,3 +255,12 @@ h1, h2, h3, h4, .font-serif-display, .font-heading {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(122, 140, 124, 0.45);
 }
+
+/* Same treatment, opt-in via class for scroll containers nested inside fixed-height cards */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(122, 140, 124, 0.25) transparent;
+}
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}

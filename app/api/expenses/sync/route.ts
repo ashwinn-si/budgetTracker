@@ -6,11 +6,13 @@ import { Tag } from "@/models/Tag";
 import { Saving } from "@/models/Saving";
 import { DeleteLog } from "@/models/DeleteLog";
 import { getCurrentUser } from "@/lib/auth";
+import { GENERAL_TRIP_ID, tripIdFilter } from "@/lib/trips";
+import { upsertTrip, updateTrip, deleteTripCascade } from "@/lib/server/trips";
 
 interface SyncItem {
   clientId: string;
   action: "create" | "update" | "delete";
-  entity: "expense" | "tag" | "saving";
+  entity: "expense" | "tag" | "saving" | "trip";
   payload: Record<string, unknown>;
   createdAt: number;
 }
@@ -34,6 +36,8 @@ async function processExpense(
   const { payload, action, clientId } = item;
 
   if (action === "create" || action === "update") {
+    const tripId = typeof payload.tripId === "string" && payload.tripId ? payload.tripId : GENERAL_TRIP_ID;
+
     // Validate amount is a usable number
     const amount = Number(payload.amount);
     if (isNaN(amount)) {
@@ -64,14 +68,14 @@ async function processExpense(
           continue;
         }
 
-        // 2. Mapped in this batch by processTag
-        const mappedId = tagMap.get(idStr) || tagMap.get(idStr.toLowerCase());
+        // 2. Mapped in this batch by processTag (raw client ids as-is; names scoped to this trip)
+        const mappedId = tagMap.get(idStr) || tagMap.get(`${tripId}:${idStr.toLowerCase()}`);
         if (mappedId && mongoose.Types.ObjectId.isValid(mappedId) && /^[a-f\d]{24}$/i.test(mappedId)) {
           resolvedTagIds.push(new mongoose.Types.ObjectId(mappedId));
           continue;
         }
 
-        // 3. Query Tag collection by clientId, name, or legacy tag name
+        // 3. Query Tag collection by clientId, name, or legacy tag name — scoped to this expense's trip
         const legacyNames: Record<string, string> = {
           tag_groceries: "Groceries",
           tag_dining: "Dining & Coffee",
@@ -84,6 +88,7 @@ async function processExpense(
 
         const dbTag = await Tag.findOne({
           userId,
+          tripId: tripIdFilter(tripId),
           $or: [
             { clientId: idStr },
             { name: searchName },
@@ -102,6 +107,15 @@ async function processExpense(
       }
     }
 
+    // Drop any resolved tag whose tripId doesn't match this expense's trip (e.g. a raw ObjectId
+    // that belongs to another trip). Missing tripId on the tag means "general".
+    let tripScopedTagIds = resolvedTagIds;
+    if (resolvedTagIds.length > 0) {
+      const tagDocs = await Tag.find({ _id: { $in: resolvedTagIds }, userId }, { tripId: 1 }).lean();
+      const tagTripById = new Map(tagDocs.map((t) => [t._id.toString(), t.tripId || GENERAL_TRIP_ID]));
+      tripScopedTagIds = resolvedTagIds.filter((id) => (tagTripById.get(id.toString()) || GENERAL_TRIP_ID) === tripId);
+    }
+
     const effectiveClientId = clientId || (payload.clientId as string) || (typeof payload._id === "string" ? payload._id : "");
     const isValidObjectId = payload._id && mongoose.Types.ObjectId.isValid(String(payload._id)) && /^[a-f\d]{24}$/i.test(String(payload._id));
     const filter: Record<string, unknown> = effectiveClientId
@@ -115,8 +129,9 @@ async function processExpense(
       clientId: effectiveClientId,
       amount,
       note: typeof payload.note === "string" ? payload.note.trim() : "",
-      tagIds: resolvedTagIds,
+      tagIds: tripScopedTagIds,
       date,
+      tripId,
       syncStatus: "synced",
       ...(payload.updatedAt
         ? { updatedAt: new Date(payload.updatedAt as string) }
@@ -188,6 +203,7 @@ async function processTag(
 ): Promise<void> {
   const { payload, action, clientId } = item;
   const tagName = typeof payload.name === "string" ? payload.name.trim() : "";
+  const tripId = typeof payload.tripId === "string" && payload.tripId ? payload.tripId : GENERAL_TRIP_ID;
 
   if (!tagName && action !== "delete") {
     throw new Error("Tag is missing a name");
@@ -211,6 +227,7 @@ async function processTag(
           colorKey: typeof payload.colorKey === "string"
             ? payload.colorKey
             : "#22C55E",
+          tripId,
           ...(effectiveClientId ? { clientId: effectiveClientId } : {}),
         },
       },
@@ -219,7 +236,7 @@ async function processTag(
 
     if (!tag) {
       tag = await Tag.findOneAndUpdate(
-        { name: tagName, userId },
+        { name: tagName, userId, tripId: tripIdFilter(tripId) },
         {
           $set: {
             userId,
@@ -227,6 +244,7 @@ async function processTag(
             colorKey: typeof payload.colorKey === "string"
               ? payload.colorKey
               : "#22C55E",
+            tripId,
             ...(effectiveClientId ? { clientId: effectiveClientId } : {}),
           },
         },
@@ -239,13 +257,13 @@ async function processTag(
       if (effectiveClientId) {
         tagMap.set(effectiveClientId, serverId);
       }
-      tagMap.set(tagName.toLowerCase(), serverId);
+      tagMap.set(`${tripId}:${tagName.toLowerCase()}`, serverId);
     }
 
   } else if (action === "create") {
-    // Tags are identified by { name, userId } — their compound unique index.
+    // Tags are identified by { name, userId, tripId } — their compound unique index.
     const tag = await Tag.findOneAndUpdate(
-      { name: tagName, userId },
+      { name: tagName, userId, tripId: tripIdFilter(tripId) },
       {
         $set: {
           userId,
@@ -253,6 +271,7 @@ async function processTag(
           colorKey: typeof payload.colorKey === "string"
             ? payload.colorKey
             : "#22C55E",
+          tripId,
           ...(effectiveClientId ? { clientId: effectiveClientId } : {}),
         },
       },
@@ -264,12 +283,12 @@ async function processTag(
       if (effectiveClientId) {
         tagMap.set(effectiveClientId, serverId);
       }
-      tagMap.set(tagName.toLowerCase(), serverId);
+      tagMap.set(`${tripId}:${tagName.toLowerCase()}`, serverId);
     }
   } else if (action === "delete") {
     let tag = null;
     if (tagName) {
-      tag = await Tag.findOne({ name: tagName, userId });
+      tag = await Tag.findOne({ name: tagName, userId, tripId: tripIdFilter(tripId) });
     } else {
       const isValidObjectId = /^[a-f\d]{24}$/i.test(clientId);
       tag = await Tag.findOne({
@@ -320,6 +339,27 @@ async function processTag(
         { upsert: true, new: true }
       );
     }
+  }
+}
+
+async function processTrip(item: SyncItem, userId: string): Promise<void> {
+  const { payload, action, clientId } = item;
+  const tripId = (typeof payload.tripId === "string" && payload.tripId) || clientId;
+
+  if (action === "create") {
+    const result = await upsertTrip(userId, { ...payload, tripId });
+    if (result.error) throw new Error(result.error);
+  } else if (action === "update") {
+    let result = await updateTrip(userId, tripId, payload);
+    // An update can arrive for a trip whose create never landed; upsert so the queue item doesn't retry forever
+    if (result.status === 404 && tripId !== GENERAL_TRIP_ID) {
+      result = await upsertTrip(userId, { ...payload, tripId });
+      if (!result.error && payload.status !== undefined) result = await updateTrip(userId, tripId, payload);
+    }
+    if (result.error) throw new Error(result.error);
+  } else if (action === "delete") {
+    const result = await deleteTripCascade(userId, tripId);
+    if (result.error && result.status !== 404) throw new Error(result.error);
   }
 }
 
@@ -498,11 +538,13 @@ export async function POST(req: NextRequest) {
     const failedItems: FailedItem[] = [];
     const tagMap = new Map<string, string>();
 
-    // Process all tag items FIRST so tags exist before expenses reference them
+    // Process trips first (so tags/expenses can reference them), then tags,
+    // then everything else, so tags exist before expenses reference them.
+    const entityOrder: Record<string, number> = { trip: 0, tag: 1 };
     const orderedItems = [...items].sort((a, b) => {
-      if (a.entity === "tag" && b.entity !== "tag") return -1;
-      if (a.entity !== "tag" && b.entity === "tag") return 1;
-      return 0;
+      const orderA = entityOrder[a.entity] ?? 2;
+      const orderB = entityOrder[b.entity] ?? 2;
+      return orderA - orderB;
     });
 
     for (const item of orderedItems) {
@@ -530,6 +572,9 @@ export async function POST(req: NextRequest) {
             break;
           case "saving":
             await processSaving(item, userId);
+            break;
+          case "trip":
+            await processTrip(item, userId);
             break;
           default:
             // Unknown entity type — log and skip, don't fail the whole batch

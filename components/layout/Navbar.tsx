@@ -7,6 +7,7 @@ import { Sun, Moon, CloudCheck, CloudUpload, WifiOff, Menu } from "lucide-react"
 import { useTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import { useSidebar } from "@/context/SidebarContext";
+import { TripSwitcher } from "@/components/trips/TripSwitcher";
 
 export function Navbar() {
   const { theme, toggleTheme } = useTheme();
@@ -16,19 +17,19 @@ export function Navbar() {
   return (
     // Only displayed on mobile (< lg), desktop uses the full Sidebar
     <header className="lg:hidden sticky top-0 z-30 w-full glass-mid border-b border-white/60 dark:border-white/10 backdrop-blur-2xl px-4 py-2.5 shadow-sm transition-colors">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 min-w-0">
           {/* Mobile Hamburger Toggle Button */}
           <button
             onClick={openMobile}
             aria-label="Open sidebar menu"
-            className="min-h-[38px] min-w-[38px] rounded-xl glass-light border border-white/60 dark:border-white/10 flex items-center justify-center text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all shadow-xs cursor-pointer"
+            className="min-h-[38px] min-w-[38px] rounded-xl glass-light border border-white/60 dark:border-white/10 flex items-center justify-center text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all shadow-xs cursor-pointer shrink-0"
           >
             <Menu className="w-5 h-5 text-[var(--text-secondary)]" />
           </button>
 
           {/* Brand */}
-          <Link href="/dashboard" className="flex items-center gap-2.5 group">
+          <Link href="/dashboard" className="flex items-center gap-2.5 group min-w-0">
             <div className="w-8 h-8 rounded-xl overflow-hidden shadow-sm shrink-0 border border-white/60 dark:border-white/10">
               <Image
                 src="/logo.png"
@@ -38,16 +39,18 @@ export function Navbar() {
                 className="w-full h-full object-cover"
               />
             </div>
-            <span className="font-heading font-semibold text-base tracking-tight text-[var(--text-primary)]">
+            <span className="font-heading font-semibold text-base tracking-tight text-[var(--text-primary)] truncate">
               Budget<span className="text-emerald-500 dark:text-emerald-400 font-normal">Flow</span>
             </span>
           </Link>
         </div>
 
         {/* Right Status & Controls */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          <TripSwitcher variant="mobile" />
+
           {/* Sync Status Badge */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-xs">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/10 shadow-xs shrink-0">
             {status === "offline" ? (
               <div className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
                 <WifiOff className="w-3 h-3" />

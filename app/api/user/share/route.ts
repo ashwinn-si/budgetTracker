@@ -1,20 +1,99 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth";
 import { connectToDatabase } from "@/lib/db";
 import { User } from "@/models/User";
+import { Trip } from "@/models/Trip";
+import { ensureGeneralTrip } from "@/lib/server/trips";
+import { GENERAL_TRIP_ID, getEffectiveShareMode } from "@/lib/trips";
 import crypto from "crypto";
 
-export async function PATCH(request: Request) {
+export async function GET(request: NextRequest) {
   try {
-    const user = await getCurrentUser();
+    const user = await getCurrentUser(request);
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    await connectToDatabase();
+    const dbUser = await User.findById(user.userId).select(
+      "isCombinedSharingEnabled combinedShareId"
+    );
+    if (!dbUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      isCombinedSharingEnabled: !!dbUser.isCombinedSharingEnabled,
+      combinedShareId: dbUser.combinedShareId || null,
+    });
+  } catch (error: unknown) {
+    console.error("Error fetching sharing preferences:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = await getCurrentUser(request);
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const body = await request.json();
-    const { isSharingEnabled } = body;
 
-    if (typeof isSharingEnabled !== "boolean") {
+    if (body.scope === "all") {
+      const { isSharingEnabled } = body;
+      if (typeof isSharingEnabled !== "boolean") {
+        return NextResponse.json(
+          { error: "isSharingEnabled must be a boolean" },
+          { status: 400 }
+        );
+      }
+
+      await connectToDatabase();
+      const dbUser = await User.findById(user.userId);
+      if (!dbUser) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+
+      if (isSharingEnabled && !dbUser.combinedShareId) {
+        dbUser.combinedShareId = crypto.randomUUID();
+      }
+      dbUser.isCombinedSharingEnabled = isSharingEnabled;
+      await dbUser.save();
+
+      return NextResponse.json({
+        success: true,
+        scope: "all",
+        isCombinedSharingEnabled: dbUser.isCombinedSharingEnabled,
+        combinedShareId: dbUser.combinedShareId || null,
+      });
+    }
+
+    const { isSharingEnabled } = body;
+    const tripId =
+      typeof body.tripId === "string" && body.tripId.trim() ? body.tripId.trim() : GENERAL_TRIP_ID;
+
+    const shareModeProvided = body.shareMode !== undefined;
+    if (shareModeProvided && body.shareMode !== "monthly" && body.shareMode !== "full") {
+      return NextResponse.json(
+        { error: 'shareMode must be "monthly" or "full"' },
+        { status: 400 }
+      );
+    }
+
+    if (isSharingEnabled === undefined && !shareModeProvided) {
+      return NextResponse.json(
+        { error: "At least one of isSharingEnabled or shareMode is required" },
+        { status: 400 }
+      );
+    }
+
+    if (isSharingEnabled !== undefined && typeof isSharingEnabled !== "boolean") {
       return NextResponse.json(
         { error: "isSharingEnabled must be a boolean" },
         { status: 400 }
@@ -23,29 +102,53 @@ export async function PATCH(request: Request) {
 
     await connectToDatabase();
 
-    // Fetch current user from DB
-    const dbUser = await User.findById(user.userId);
-    if (!dbUser) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    const trip =
+      tripId === GENERAL_TRIP_ID
+        ? await ensureGeneralTrip(user.userId)
+        : await Trip.findOne({ userId: user.userId, tripId });
+
+    if (!trip) {
+      return NextResponse.json({ error: "Trip not found" }, { status: 404 });
     }
 
-    // Generate a shareId if one doesn't exist and they are enabling sharing
-    let shareId = dbUser.shareId;
+    let shareId = trip.shareId;
     if (isSharingEnabled && !shareId) {
-      shareId = crypto.randomUUID();
+      // Backward compat: reuse the legacy user-level shareId for General so
+      // links already in circulation keep working, even before the migration ran.
+      if (tripId === GENERAL_TRIP_ID) {
+        const dbUser = await User.findById(user.userId);
+        if (dbUser?.shareId) {
+          shareId = dbUser.shareId;
+        }
+      }
+      if (!shareId) {
+        shareId = crypto.randomUUID();
+      }
     }
 
-    dbUser.isSharingEnabled = isSharingEnabled;
+    if (isSharingEnabled !== undefined) {
+      trip.isSharingEnabled = isSharingEnabled;
+    }
     if (shareId) {
-      dbUser.shareId = shareId;
+      trip.shareId = shareId;
+    }
+    if (shareModeProvided) {
+      trip.shareMode = body.shareMode as "monthly" | "full";
     }
 
-    await dbUser.save();
+    await trip.save();
+
+    // Keep the legacy user-level flag in step so the old /share/<userShareId> fallback can't outlive a disable
+    if (tripId === GENERAL_TRIP_ID && isSharingEnabled !== undefined) {
+      await User.updateOne({ _id: user.userId }, { $set: { isSharingEnabled } });
+    }
 
     return NextResponse.json({
       success: true,
-      isSharingEnabled: dbUser.isSharingEnabled,
-      shareId: dbUser.shareId,
+      tripId: trip.tripId,
+      isSharingEnabled: trip.isSharingEnabled,
+      shareId: trip.shareId,
+      shareMode: getEffectiveShareMode(trip),
     });
   } catch (error: unknown) {
     console.error("Error updating sharing preferences:", error);

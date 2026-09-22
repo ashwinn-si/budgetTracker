@@ -17,6 +17,7 @@ import {
   ChevronDown,
   PiggyBank,
   ArrowDownLeft,
+  Eye,
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
@@ -24,11 +25,16 @@ import { ExpenseFormModal } from "@/components/expenses/ExpenseFormModal";
 import { db, LocalExpense } from "@/lib/offline/db";
 import { queueExpenseDeletion, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useTrip } from "@/context/TripContext";
+import { filterExpensesForTrip, GENERAL_TRIP_ID } from "@/lib/trips";
 import { SelectSheet } from "@/components/ui/SelectSheet";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { TripSourceBadge } from "@/components/trips/TripSourceBadge";
+import { MirroredExpenseModal } from "@/components/trips/MirroredExpenseModal";
 
 export default function ExpensesPage() {
   const { formatAmount, currencyInfo } = useCurrency();
+  const { trips, activeTripId } = useTrip();
   const searchParams = useSearchParams();
   const tagParam = searchParams.get("tag");
   const monthParam = searchParams.get("month");
@@ -39,6 +45,7 @@ export default function ExpensesPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<LocalExpense | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
+  const [viewingMirroredExpense, setViewingMirroredExpense] = useState<LocalExpense | null>(null);
 
   useEffect(() => {
     if (tagParam) {
@@ -53,13 +60,42 @@ export default function ExpensesPage() {
   }, [monthParam]);
 
   // Live query from Dexie
-  const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const rawExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
   const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
-  const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
+  const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
 
+  // Scoped to the active trip (own + mirrored-in expenses)
+  const allExpenses = useMemo(
+    () => filterExpensesForTrip(rawExpenses, activeTripId, trips).all,
+    [rawExpenses, activeTripId, trips]
+  );
+
+  // Tags belonging to the active trip only
+  const allTags = useMemo(
+    () => rawTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === activeTripId),
+    [rawTags, activeTripId]
+  );
+
+  // Lookup over ALL tags (across trips) so mirrored expenses keep their tag labels/colors
   const tagMap = useMemo(() => {
-    return new Map(allTags.map((t) => [t._id, t]));
-  }, [allTags]);
+    return new Map(rawTags.map((t) => [t._id, t]));
+  }, [rawTags]);
+
+  // Source trips mirrored into the active trip, for the "From <trip>" filter options
+  const tripTagOptions = useMemo(() => {
+    const sourceTripIds = new Set<string>();
+    allExpenses.forEach((exp) => {
+      const tripId = exp.tripId || GENERAL_TRIP_ID;
+      if (tripId !== activeTripId) sourceTripIds.add(tripId);
+    });
+    return Array.from(sourceTripIds).map((tripId) => {
+      const trip = trips.find((t) => t.tripId === tripId);
+      return {
+        value: `trip:${tripId}`,
+        label: `From ${trip?.emoji ? `${trip.emoji} ` : "✈ "}${trip?.name || "Trip"}`,
+      };
+    });
+  }, [allExpenses, activeTripId, trips]);
 
   const linkedWithdrawalIds = useMemo(() => {
     const ids = new Set<string>();
@@ -115,7 +151,9 @@ export default function ExpensesPage() {
 
         const matchesTag =
           selectedTag === "all" ||
-          (exp.tagIds && exp.tagIds.includes(selectedTag));
+          (selectedTag.startsWith("trip:")
+            ? (exp.tripId || GENERAL_TRIP_ID) === selectedTag.slice(5)
+            : exp.tagIds && exp.tagIds.includes(selectedTag));
 
         const matchesMonth =
           selectedMonth === "all" ||
@@ -201,7 +239,8 @@ export default function ExpensesPage() {
               onChange={setSelectedTag}
               options={[
                 { value: "all", label: "All Tags" },
-                ...allTags.map(tag => ({ value: tag._id, label: tag.name }))
+                ...allTags.map(tag => ({ value: tag._id, label: tag.name })),
+                ...tripTagOptions,
               ]}
               icon={<Filter className="w-4 h-4" />}
               title="Filter by Tag"
@@ -254,6 +293,7 @@ export default function ExpensesPage() {
             });
 
             const isFromSavings = linkedWithdrawalIds.has(expense.clientId);
+            const isMirrored = (expense.tripId || GENERAL_TRIP_ID) !== activeTripId;
 
             return (
               <GlassCard
@@ -327,6 +367,7 @@ export default function ExpensesPage() {
                           })}
                         </div>
                       )}
+                      {isMirrored && <TripSourceBadge tripId={expense.tripId || GENERAL_TRIP_ID} size="xs" />}
                     </div>
                   </div>
                 </div>
@@ -338,20 +379,32 @@ export default function ExpensesPage() {
                   </span>
 
                   <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => handleEdit(expense)}
-                      aria-label="Edit expense"
-                      className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(expense.clientId)}
-                      aria-label="Delete expense"
-                      className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {isMirrored ? (
+                      <button
+                        onClick={() => setViewingMirroredExpense(expense)}
+                        aria-label="View expense details"
+                        className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEdit(expense)}
+                          aria-label="Edit expense"
+                          className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(expense.clientId)}
+                          aria-label="Delete expense"
+                          className="min-h-[44px] min-w-[44px] flex items-center justify-center rounded-xl text-[var(--text-muted)] hover:text-rose-500 hover:bg-rose-500/10 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               </GlassCard>
@@ -380,6 +433,14 @@ export default function ExpensesPage() {
         message="Are you sure you want to delete this expense record? This will also remove any linked savings entry."
         confirmText="Delete Expense"
         variant="danger"
+      />
+
+      {/* Read-only view for mirrored (cross-trip) expenses */}
+      <MirroredExpenseModal
+        isOpen={!!viewingMirroredExpense}
+        onClose={() => setViewingMirroredExpense(null)}
+        expense={viewingMirroredExpense}
+        tagMap={tagMap}
       />
     </div>
   );

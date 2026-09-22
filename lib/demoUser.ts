@@ -4,6 +4,10 @@ import { User, IUser } from "@/models/User";
 import { Tag } from "@/models/Tag";
 import { Expense } from "@/models/Expense";
 import { Saving } from "@/models/Saving";
+import { Trip } from "@/models/Trip";
+import { GENERAL_TRIP_ID } from "@/lib/trips";
+
+const DEMO_TRIP_ID = "trip_demo_goa";
 
 export const DEMO_USER_EMAIL = "user@gmail.com";
 export const DEMO_USER_PASSWORD = "root";
@@ -34,6 +38,38 @@ export async function ensureDemoUserSeeded(): Promise<any> {
 
   const userId = user._id.toString();
 
+  // Ensure the General trip exists, plus one sample linked trip
+  await Trip.updateOne(
+    { userId, tripId: GENERAL_TRIP_ID },
+    {
+      $setOnInsert: {
+        userId,
+        tripId: GENERAL_TRIP_ID,
+        name: "General",
+        isDefault: true,
+        status: "active",
+        colorKey: "#22C55E",
+        mirrorToTripIds: [],
+      },
+    },
+    { upsert: true }
+  );
+  await Trip.updateOne(
+    { userId, tripId: DEMO_TRIP_ID },
+    {
+      $setOnInsert: {
+        userId,
+        tripId: DEMO_TRIP_ID,
+        name: "Goa Trip",
+        emoji: "🏖️",
+        colorKey: "#F59E0B",
+        status: "active",
+        mirrorToTripIds: [GENERAL_TRIP_ID],
+      },
+    },
+    { upsert: true }
+  );
+
   // Ensure default demo tags exist for this demo user
   const defaultTagDefs = [
     { name: "Groceries", colorKey: "#22C55E" },
@@ -47,15 +83,38 @@ export async function ensureDemoUserSeeded(): Promise<any> {
   const tagMap: Record<string, mongoose.Types.ObjectId> = {};
 
   for (const def of defaultTagDefs) {
-    let tag = await Tag.findOne({ userId, name: def.name });
+    let tag = await Tag.findOne({ userId, tripId: GENERAL_TRIP_ID, name: def.name });
     if (!tag) {
       tag = await Tag.create({
         userId,
+        tripId: GENERAL_TRIP_ID,
         name: def.name,
         colorKey: def.colorKey,
       });
     }
     tagMap[def.name] = tag._id as mongoose.Types.ObjectId;
+  }
+
+  // Sample trip tags
+  const tripTagDefs = [
+    { name: "Flights", colorKey: "#3B82F6" },
+    { name: "Hotels", colorKey: "#8B5CF6" },
+    { name: "Sightseeing", colorKey: "#14B8A6" },
+  ];
+
+  const tripTagMap: Record<string, mongoose.Types.ObjectId> = {};
+
+  for (const def of tripTagDefs) {
+    let tag = await Tag.findOne({ userId, tripId: DEMO_TRIP_ID, name: def.name });
+    if (!tag) {
+      tag = await Tag.create({
+        userId,
+        tripId: DEMO_TRIP_ID,
+        name: def.name,
+        colorKey: def.colorKey,
+      });
+    }
+    tripTagMap[def.name] = tag._id as mongoose.Types.ObjectId;
   }
 
   // Clear existing demo data to ensure a fresh seed
@@ -95,6 +154,7 @@ export async function ensureDemoUserSeeded(): Promise<any> {
       note: `Random ${tagKey} expense`,
       tagIds: [tagId].filter(Boolean),
       date,
+      tripId: GENERAL_TRIP_ID,
       syncStatus: "synced" as const,
     });
     
@@ -123,6 +183,39 @@ export async function ensureDemoUserSeeded(): Promise<any> {
       type: "deposit",
       note: "Salary / Bonus allocation",
       date,
+      syncStatus: "synced" as const,
+    });
+  }
+
+  // Seed ~10 sample expenses in the Goa Trip
+  const tripTagKeys = Object.keys(tripTagMap);
+  const tripExpenseNotes: Record<string, string[]> = {
+    Flights: ["Round-trip flight tickets", "Airport transfer cab"],
+    Hotels: ["Beach resort — 3 nights", "Homestay booking"],
+    Sightseeing: ["Scuba diving trip", "Old Goa churches tour", "Sunset cruise"],
+  };
+
+  for (let i = 1; i <= 10; i++) {
+    const daysAgo = Math.floor(Math.random() * 30);
+    const date = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    const tagKey = tripTagKeys[Math.floor(Math.random() * tripTagKeys.length)];
+    const tagId = tripTagMap[tagKey];
+    const notes = tripExpenseNotes[tagKey];
+    const note = notes[Math.floor(Math.random() * notes.length)];
+
+    let amount = 20 + Math.random() * 80;
+    if (tagKey === "Flights") amount = 150 + Math.random() * 250;
+    if (tagKey === "Hotels") amount = 80 + Math.random() * 120;
+    if (tagKey === "Sightseeing") amount = 15 + Math.random() * 60;
+
+    demoExpenses.push({
+      clientId: `demo-trip-exp-${i}`,
+      userId,
+      amount: Number(amount.toFixed(2)),
+      note,
+      tagIds: [tagId].filter(Boolean),
+      date,
+      tripId: DEMO_TRIP_ID,
       syncStatus: "synced" as const,
     });
   }

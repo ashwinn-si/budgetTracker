@@ -26,18 +26,22 @@ import {
   Tag as TagIcon,
   History,
   Sparkles,
-  Unlink
+  Unlink,
+  Plane
 } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Button } from "@/components/ui/Button";
 import { ConfirmModal } from "@/components/ui/ConfirmModal";
+import { TripsCard } from "@/components/trips/TripsCard";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useTrip } from "@/context/TripContext";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
-import { db, LocalDeleteLog } from "@/lib/offline/db";
+import { db, LocalDeleteLog, LocalTrip } from "@/lib/offline/db";
+import { GENERAL_TRIP_ID } from "@/lib/trips";
 import {
   clearAllLocalExpenses,
   recoverDeletedItem,
@@ -47,9 +51,20 @@ import {
 
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
+  const { activeTripId, activeTrip, trips } = useTrip();
   const { theme, setTheme } = useTheme();
   const { currency, setCurrency, isDecimal, setIsDecimal, formatAmount } = useCurrency();
   const { status, pendingCount, lastSyncedAt, syncNow, isSyncing } = useAuth().syncStatus;
+
+  // Scroll to a section when navigated here with a hash (e.g. /profile#trips)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.location.hash !== "#trips") return;
+    const target = document.getElementById("trips");
+    if (target) {
+      requestAnimationFrame(() => target.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
+  }, []);
 
   // Sheets sync state
   const [isSheetsSyncing, setIsSheetsSyncing] = useState(false);
@@ -136,43 +151,12 @@ export default function ProfilePage() {
   const handleSyncGoogleSheets = async () => {
     setIsSheetsSyncing(true);
     setSheetsMessage(null);
-    try {
-      const res = await fetch("/api/export/sheets", { method: "POST" });
-      const data = await res.json();
-      if (res.ok && data.url) {
-        setSheetsUrl(data.url);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("budget_sheets_url", data.url);
-        }
-        if (updateUser && data.spreadsheetId) {
-          updateUser({
-            sheetsLinked: true,
-            sheetsSpreadsheetId: data.spreadsheetId,
-            sheetsLastSyncedAt: data.lastSyncedAt,
-          });
-        }
-        toast.success(data.message || "Spreadsheet synced successfully!");
-        setSheetsMessage(data.message || "Spreadsheet synced successfully!");
-      } else {
-        toast.error(data.error || "Please log in with Google to sync to your Drive Sheet.");
-        setSheetsMessage(data.error || "Please log in with Google to sync to your Drive Sheet.");
-      }
-    } catch {
-      toast.error("Could not contact server to sync with Google Sheets.");
-      setSheetsMessage("Could not contact server to sync with Google Sheets.");
-    } finally {
-      setIsSheetsSyncing(false);
-    }
-  };
-
-  const handleDeleteAndSyncFresh = async () => {
-    setIsResetSyncing(true);
-    setSheetsMessage(null);
+    toast.loading(`Syncing ${activeTrip.name}…`, { id: "sheets-sync" });
     try {
       const res = await fetch("/api/export/sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "fresh" }),
+        body: JSON.stringify({ tripId: activeTripId }),
       });
       const data = await res.json();
       if (res.ok && data.url) {
@@ -187,15 +171,52 @@ export default function ProfilePage() {
             sheetsLastSyncedAt: data.lastSyncedAt,
           });
         }
-        toast.success(data.message || "Fresh Google Sheet created and synced!");
-        setSheetsMessage(data.message || "Fresh Google Sheet created and synced!");
-        setIsDeleteAndSyncModalOpen(false);
+        toast.success(data.message || "Spreadsheet synced successfully!", { id: "sheets-sync" });
+        setSheetsMessage(data.message || "Spreadsheet synced successfully!");
       } else {
-        toast.error(data.error || "Failed to reset and resync Google Sheet.");
+        toast.error(data.error || "Please log in with Google to sync to your Drive Sheet.", { id: "sheets-sync" });
         setSheetsMessage(data.error || "Please log in with Google to sync to your Drive Sheet.");
       }
     } catch {
-      toast.error("Could not contact server to resync Google Sheets.");
+      toast.error("Could not contact server to sync with Google Sheets.", { id: "sheets-sync" });
+      setSheetsMessage("Could not contact server to sync with Google Sheets.");
+    } finally {
+      setIsSheetsSyncing(false);
+    }
+  };
+
+  const handleDeleteAndSyncFresh = async () => {
+    setIsResetSyncing(true);
+    setSheetsMessage(null);
+    toast.loading(`Starting a fresh sync for ${activeTrip.name}…`, { id: "sheets-fresh-sync" });
+    try {
+      const res = await fetch("/api/export/sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "fresh", tripId: activeTripId }),
+      });
+      const data = await res.json();
+      if (res.ok && data.url) {
+        setSheetsUrl(data.url);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("budget_sheets_url", data.url);
+        }
+        if (updateUser && data.spreadsheetId) {
+          updateUser({
+            sheetsLinked: true,
+            sheetsSpreadsheetId: data.spreadsheetId,
+            sheetsLastSyncedAt: data.lastSyncedAt,
+          });
+        }
+        toast.success(data.message || "Fresh Google Sheet created and synced!", { id: "sheets-fresh-sync" });
+        setSheetsMessage(data.message || "Fresh Google Sheet created and synced!");
+        setIsDeleteAndSyncModalOpen(false);
+      } else {
+        toast.error(data.error || "Failed to reset and resync Google Sheet.", { id: "sheets-fresh-sync" });
+        setSheetsMessage(data.error || "Please log in with Google to sync to your Drive Sheet.");
+      }
+    } catch {
+      toast.error("Could not contact server to resync Google Sheets.", { id: "sheets-fresh-sync" });
       setSheetsMessage("Could not contact server to sync with Google Sheets.");
     } finally {
       setIsResetSyncing(false);
@@ -296,7 +317,7 @@ export default function ProfilePage() {
   const handleExcelExport = async () => {
     setIsExporting(true);
     try {
-      const res = await fetch("/api/export/excel");
+      const res = await fetch(`/api/export/excel?tripId=${encodeURIComponent(activeTripId)}`);
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -315,36 +336,146 @@ export default function ProfilePage() {
     }
   };
 
-  // Public Sharing
-  const [isSharingLoading, setIsSharingLoading] = useState(false);
-  
-  const handleToggleSharing = async () => {
-    setIsSharingLoading(true);
+  // Per-trip sharing
+  const [sharingTripId, setSharingTripId] = useState<string | null>(null);
+
+  const sharingTrips = useMemo(() => {
+    const general = trips.find((t) => t.tripId === GENERAL_TRIP_ID);
+    const others = trips.filter((t) => t.tripId !== GENERAL_TRIP_ID);
+    const active = others.filter((t) => t.status !== "completed");
+    const completed = others.filter((t) => t.status === "completed");
+    return [...(general ? [general] : []), ...active, ...completed];
+  }, [trips]);
+
+  const sharedTrips = useMemo(() => sharingTrips.filter((t) => t.isSharingEnabled), [sharingTrips]);
+
+  // Combined "all shared trips" link
+  const [combinedSharing, setCombinedSharing] = useState<{ isEnabled: boolean; shareId: string | null }>({
+    isEnabled: false,
+    shareId: null,
+  });
+  const [isCombinedToggling, setIsCombinedToggling] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadCombinedSharing() {
+      try {
+        const res = await fetch("/api/user/share");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (isMounted && data.success) {
+          setCombinedSharing({
+            isEnabled: !!data.isCombinedSharingEnabled,
+            shareId: data.combinedShareId || null,
+          });
+        }
+      } catch {
+        // Offline fallback: leave combined sharing state as-is
+      }
+    }
+    loadCombinedSharing();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleToggleCombinedSharing = async () => {
+    setIsCombinedToggling(true);
     try {
       const res = await fetch("/api/user/share", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isSharingEnabled: !user?.isSharingEnabled }),
+        body: JSON.stringify({ scope: "all", isSharingEnabled: !combinedSharing.isEnabled }),
       });
       const data = await res.json();
-      if (res.ok) {
-        updateUser({ isSharingEnabled: data.isSharingEnabled, shareId: data.shareId });
-        toast.success(data.isSharingEnabled ? "Sharing enabled" : "Sharing disabled");
+      if (res.ok && data.success) {
+        setCombinedSharing({
+          isEnabled: data.isCombinedSharingEnabled,
+          shareId: data.combinedShareId || null,
+        });
+        toast.success(
+          data.isCombinedSharingEnabled ? "Combined link enabled" : "Combined link disabled"
+        );
       } else {
-        toast.error("Failed to update sharing preferences.");
+        toast.error(data.error || "Failed to update combined sharing.");
       }
     } catch (e) {
       console.error(e);
       toast.error("Network error.");
     } finally {
-      setIsSharingLoading(false);
+      setIsCombinedToggling(false);
     }
   };
 
-  const handleCopyLink = () => {
-    if (user?.shareId) {
-      navigator.clipboard.writeText(`${window.location.origin}/share/${user.shareId}`);
+  const handleCopyCombinedLink = () => {
+    if (combinedSharing.shareId) {
+      navigator.clipboard.writeText(`${window.location.origin}/share/${combinedSharing.shareId}`);
       toast.success("Link copied!");
+    }
+  };
+
+  const handleToggleTripSharing = async (trip: LocalTrip) => {
+    setSharingTripId(trip.tripId);
+    try {
+      const res = await fetch("/api/user/share", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId: trip.tripId, isSharingEnabled: !trip.isSharingEnabled }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await db.trips.update(trip.tripId, {
+          isSharingEnabled: data.isSharingEnabled,
+          shareId: data.shareId,
+        });
+        if (trip.tripId === GENERAL_TRIP_ID) {
+          updateUser({ isSharingEnabled: data.isSharingEnabled, shareId: data.shareId });
+        }
+        toast.success(
+          data.isSharingEnabled ? `Sharing enabled for ${trip.name}` : `Sharing disabled for ${trip.name}`
+        );
+      } else {
+        toast.error(data.error || "Failed to update sharing preferences.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Network error.");
+    } finally {
+      setSharingTripId(null);
+    }
+  };
+
+  const handleCopyTripLink = (trip: LocalTrip) => {
+    if (trip.shareId) {
+      navigator.clipboard.writeText(`${window.location.origin}/share/${trip.shareId}`);
+      toast.success("Link copied!");
+    }
+  };
+
+  const [shareModeUpdatingTripId, setShareModeUpdatingTripId] = useState<string | null>(null);
+
+  const handleSetShareMode = async (trip: LocalTrip, shareMode: "monthly" | "full") => {
+    const effectiveCurrent = trip.shareMode ?? (trip.tripId === GENERAL_TRIP_ID ? "monthly" : "full");
+    if (effectiveCurrent === shareMode) return;
+    setShareModeUpdatingTripId(trip.tripId);
+    try {
+      const res = await fetch("/api/user/share", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripId: trip.tripId, shareMode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await db.trips.update(trip.tripId, { shareMode: data.shareMode });
+        toast.success(`Report set to ${data.shareMode === "full" ? "Full report" : "Monthly"}`);
+      } else {
+        toast.error(data.error || "Failed to update report mode.");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Network error.");
+    } finally {
+      setShareModeUpdatingTripId(null);
     }
   };
 
@@ -358,7 +489,7 @@ export default function ProfilePage() {
     });
     return map;
   }, [allTags]);
-  const [deleteLogFilter, setDeleteLogFilter] = useState<"all" | "expense" | "saving" | "tag">("all");
+  const [deleteLogFilter, setDeleteLogFilter] = useState<"all" | "expense" | "saving" | "tag" | "trip">("all");
   const [recoveringId, setRecoveringId] = useState<string | null>(null);
   const [logToDeletePermanently, setLogToDeletePermanently] = useState<LocalDeleteLog | null>(null);
   const [isEmptyBinModalOpen, setIsEmptyBinModalOpen] = useState(false);
@@ -418,6 +549,7 @@ export default function ProfilePage() {
       expense: rawDeleteLogs.filter((l) => l.entityType === "expense").length,
       saving: rawDeleteLogs.filter((l) => l.entityType === "saving").length,
       tag: rawDeleteLogs.filter((l) => l.entityType === "tag").length,
+      trip: rawDeleteLogs.filter((l) => l.entityType === "trip").length,
     };
   }, [rawDeleteLogs]);
 
@@ -449,6 +581,8 @@ export default function ProfilePage() {
             ? "Expense"
             : log.entityType === "saving"
             ? "Saving"
+            : log.entityType === "trip"
+            ? "Trip"
             : "Category";
         toast.success(`${typeLabel} restored successfully!`);
       } else {
@@ -595,6 +729,9 @@ export default function ProfilePage() {
               })}
             </div>
           </GlassCard>
+
+          {/* Trips */}
+          <TripsCard />
 
           {/* Decimal Places Setting */}
           <GlassCard variant="strong" className="p-4 sm:p-6 lg:p-7">
@@ -969,54 +1106,165 @@ export default function ProfilePage() {
             </div>
           </GlassCard>
 
-          {/* Public Dashboard Sharing */}
+          {/* Per-trip Sharing */}
           <GlassCard variant="mid" className="p-4 sm:p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                  <Share2 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-sm sm:text-base text-[var(--text-primary)]">
-                    Public Dashboard
-                  </h3>
-                  <p className="text-xs text-[var(--text-muted)]">
-                    Share a read-only view of your finances
-                  </p>
-                </div>
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <Share2 className="w-5 h-5" />
               </div>
-              <Button
-                variant={user?.isSharingEnabled ? "ghost" : "primary"}
-                size="sm"
-                onClick={handleToggleSharing}
-                isLoading={isSharingLoading}
-                className={user?.isSharingEnabled ? "text-rose-600 border-rose-500/30 hover:bg-rose-500/10" : "bg-indigo-600 hover:bg-indigo-700 text-white"}
-              >
-                {user?.isSharingEnabled ? "Disable" : "Enable"}
-              </Button>
+              <div>
+                <h3 className="font-semibold text-sm sm:text-base text-[var(--text-primary)]">
+                  Sharing
+                </h3>
+                <p className="text-xs text-[var(--text-muted)]">
+                  Share a read-only view of a trip&apos;s finances
+                </p>
+              </div>
             </div>
 
-            {user?.isSharingEnabled && user.shareId && (
-              <div className="pt-4 border-t border-black/5 dark:border-white/5 space-y-3">
-                <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                  Anyone with this link can view your current month's total spending, savings, and category breakdown. They cannot edit your data.
-                </p>
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 p-2.5 rounded-xl bg-white/60 dark:bg-black/40 border border-black/10 dark:border-white/10 text-xs font-mono text-[var(--text-primary)] truncate select-all">
-                    {typeof window !== "undefined" ? `${window.location.origin}/share/${user.shareId}` : `/share/${user.shareId}`}
+            <div className="p-4 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold text-[var(--text-primary)]">All shared trips</span>
+                    <span className="text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 shrink-0">
+                      Combined
+                    </span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCopyLink}
-                    icon={<Copy className="w-4 h-4" />}
-                    className="shrink-0"
+                  <p
+                    className="text-xs text-[var(--text-muted)] mt-0.5"
+                    title="Disabling an individual trip's sharing below automatically removes it from this link."
                   >
-                    Copy
-                  </Button>
+                    One link for every trip you share below ({sharedTrips.length} trip{sharedTrips.length === 1 ? "" : "s"})
+                  </p>
                 </div>
+                <Button
+                  variant={combinedSharing.isEnabled ? "ghost" : "primary"}
+                  size="sm"
+                  onClick={handleToggleCombinedSharing}
+                  isLoading={isCombinedToggling}
+                  className={
+                    combinedSharing.isEnabled
+                      ? "text-rose-600 border-rose-500/30 hover:bg-rose-500/10 shrink-0"
+                      : "bg-indigo-600 hover:bg-indigo-700 text-white shrink-0"
+                  }
+                >
+                  {combinedSharing.isEnabled ? "Disable" : "Enable"}
+                </Button>
               </div>
-            )}
+
+              {combinedSharing.isEnabled && combinedSharing.shareId && (
+                <>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 p-2.5 rounded-xl bg-white/60 dark:bg-black/40 border border-black/10 dark:border-white/10 text-xs font-mono text-[var(--text-primary)] truncate select-all">
+                      {typeof window !== "undefined"
+                        ? `${window.location.origin}/share/${combinedSharing.shareId}`
+                        : `/share/${combinedSharing.shareId}`}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCopyCombinedLink}
+                      icon={<Copy className="w-4 h-4" />}
+                      className="shrink-0"
+                    >
+                      Copy
+                    </Button>
+                  </div>
+
+                  {sharedTrips.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {sharedTrips.map((trip) => (
+                        <span
+                          key={trip.tripId}
+                          className="inline-flex items-center gap-1 rounded-full font-medium border px-2 py-0.5 text-[10px]"
+                          style={{
+                            backgroundColor: `${trip.colorKey || "#22C55E"}1F`,
+                            borderColor: `${trip.colorKey || "#22C55E"}40`,
+                            color: trip.colorKey || "#22C55E",
+                          }}
+                        >
+                          <span>{trip.emoji || (trip.tripId === GENERAL_TRIP_ID ? "💼" : "✈️")}</span>
+                          <span className="truncate max-w-[120px]">{trip.name}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-amber-600 dark:text-amber-400">
+                      Enable sharing on at least one trip below.
+                    </p>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="space-y-3 max-h-[360px] overflow-y-auto custom-scrollbar p-1 -m-1">
+              {sharingTrips.map((trip) => (
+                <div
+                  key={trip.tripId}
+                  className="p-3 rounded-2xl bg-white/50 dark:bg-black/30 border border-white/60 dark:border-white/10 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base shrink-0">{trip.emoji || (trip.tripId === GENERAL_TRIP_ID ? "💼" : "✈️")}</span>
+                      <span className="text-sm font-medium text-[var(--text-primary)] truncate">
+                        {trip.name}
+                      </span>
+                    </div>
+                    <Button
+                      variant={trip.isSharingEnabled ? "ghost" : "primary"}
+                      size="sm"
+                      onClick={() => handleToggleTripSharing(trip)}
+                      isLoading={sharingTripId === trip.tripId}
+                      className={trip.isSharingEnabled ? "text-rose-600 border-rose-500/30 hover:bg-rose-500/10" : "bg-indigo-600 hover:bg-indigo-700 text-white"}
+                    >
+                      {trip.isSharingEnabled ? "Disable" : "Enable"}
+                    </Button>
+                  </div>
+
+                  {trip.isSharingEnabled && trip.shareId && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 p-2.5 rounded-xl bg-white/60 dark:bg-black/40 border border-black/10 dark:border-white/10 text-xs font-mono text-[var(--text-primary)] truncate select-all">
+                        {typeof window !== "undefined" ? `${window.location.origin}/share/${trip.shareId}` : `/share/${trip.shareId}`}
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleCopyTripLink(trip)}
+                        icon={<Copy className="w-4 h-4" />}
+                        className="shrink-0"
+                      >
+                        Copy
+                      </Button>
+                    </div>
+                  )}
+
+                  {trip.isSharingEnabled && trip.shareId && (
+                    <div className="flex items-center gap-1 p-1 rounded-full bg-white/40 dark:bg-black/30 border border-white/50 dark:border-white/10 w-fit">
+                      {(["monthly", "full"] as const).map((modeOption) => {
+                        const effectiveMode = trip.shareMode ?? (trip.tripId === GENERAL_TRIP_ID ? "monthly" : "full");
+                        const active = effectiveMode === modeOption;
+                        return (
+                          <button
+                            key={modeOption}
+                            type="button"
+                            onClick={() => handleSetShareMode(trip, modeOption)}
+                            disabled={shareModeUpdatingTripId === trip.tripId}
+                            className={`px-3 py-1.5 rounded-full text-[11px] font-medium transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed ${
+                              active
+                                ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-semibold shadow-sm"
+                                : "text-[var(--text-secondary)] hover:bg-white/60 dark:hover:bg-white/5"
+                            }`}
+                          >
+                            {modeOption === "monthly" ? "Monthly" : "Full report"}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           </GlassCard>
 
           {/* Database & Data Management */}
@@ -1095,6 +1343,7 @@ export default function ProfilePage() {
             { id: "expense", label: "Expenses", count: logCounts.expense },
             { id: "saving", label: "Savings", count: logCounts.saving },
             { id: "tag", label: "Categories", count: logCounts.tag },
+            { id: "trip", label: "Trips", count: logCounts.trip },
           ].map((tab) => {
             const active = deleteLogFilter === tab.id;
             return (
@@ -1141,11 +1390,12 @@ export default function ProfilePage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-2.5 max-h-[480px] overflow-y-auto pr-1">
+          <div className="space-y-2.5 max-h-[480px] overflow-y-auto custom-scrollbar p-1 -m-1">
             {sortedDeleteLogs.map((log) => {
               const isExpense = log.entityType === "expense";
               const isSaving = log.entityType === "saving";
               const isTag = log.entityType === "tag";
+              const isTrip = log.entityType === "trip";
               const amountNum = Number(log.data?.amount);
               const hasAmount = !isNaN(amountNum) && (isExpense || isSaving);
               const isRecovering = recoveringId === log.id;
@@ -1214,12 +1464,15 @@ export default function ProfilePage() {
                           ? "bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/20"
                           : isSaving
                           ? "bg-teal-500/15 text-teal-600 dark:text-teal-400 border-teal-500/20"
+                          : isTrip
+                          ? "bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/20"
                           : "bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/20"
                       }`}
                     >
                       {isExpense && <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />}
                       {isSaving && <PiggyBank className="w-4 h-4 sm:w-5 sm:h-5" />}
                       {isTag && <TagIcon className="w-4 h-4 sm:w-5 sm:h-5" />}
+                      {isTrip && <Plane className="w-4 h-4 sm:w-5 sm:h-5" />}
                     </div>
 
                     <div className="min-w-0 flex-1">
@@ -1232,6 +1485,8 @@ export default function ProfilePage() {
                                 ? "bg-rose-500/15 text-rose-700 dark:text-rose-300"
                                 : isSaving
                                 ? "bg-teal-500/15 text-teal-700 dark:text-teal-300"
+                                : isTrip
+                                ? "bg-sky-500/15 text-sky-700 dark:text-sky-300"
                                 : "bg-purple-500/15 text-purple-700 dark:text-purple-300"
                             }`}
                           >

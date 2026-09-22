@@ -1,14 +1,30 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useEffect, useState, useRef, use, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { PieChart, TrendingDown, TrendingUp, AlertCircle, Share2, Moon, Sun, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  PieChart,
+  TrendingDown,
+  TrendingUp,
+  AlertCircle,
+  Moon,
+  Sun,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  Receipt,
+  Plane,
+  Check,
+} from "lucide-react";
+import { format, parseISO } from "date-fns";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { useTheme } from "@/context/ThemeContext";
 import { Loader } from "@/components/ui/Loader";
+import { GENERAL_TRIP_ID } from "@/lib/trips";
 
 interface CategoryBreakdown {
   tagId: string;
@@ -16,27 +32,258 @@ interface CategoryBreakdown {
   colorKey: string;
   total: number;
   percentage: string;
+  isMirrored?: boolean;
+  sourceTripId?: string;
+  sourceTripName?: string;
+}
+
+interface RecentExpenseTag {
+  name: string;
+  colorKey: string;
+}
+
+interface RecentExpenseSourceTrip {
+  tripId: string;
+  name: string;
+  emoji: string;
+  colorKey: string;
+}
+
+interface RecentExpense {
+  date: string;
+  note: string;
+  amount: number;
+  tags: RecentExpenseTag[];
+  sourceTrip: RecentExpenseSourceTrip | null;
+}
+
+interface TripInfo {
+  tripId: string;
+  name: string;
+  emoji: string;
+  colorKey: string;
+  status: "active" | "completed";
+  startDate: string | null;
+  endDate: string | null;
+}
+
+interface CombinedTripOption {
+  tripId: string;
+  name: string;
+  emoji: string;
+  colorKey: string;
+  status: "active" | "completed";
+}
+
+interface CombinedInfo {
+  trips: CombinedTripOption[];
+  selectedTripId: string;
 }
 
 interface SharedData {
   userName: string;
   currency: string;
+  mode: "monthly" | "full";
+  totalSpent: number;
   totalSpentThisMonth: number;
-  totalSavings: number;
+  totalSavings: number | null;
   categoryBreakdown: CategoryBreakdown[];
+  recentExpenses: RecentExpense[];
+  expenseCount: number;
+  range: { from: string | null; to: string | null } | null;
+  dailyAverage: number | null;
+  trip: TripInfo;
   month: string;
   year: number;
+  combined?: CombinedInfo | null;
 }
 
-export default function SharedDashboardPage({ params }: { params: Promise<{ shareId: string }> }) {
-  // Unwrap params according to Next.js 15+ conventions
-  const { shareId } = use(params);
+function TripSwitcher({
+  combined,
+  onSelect,
+}: {
+  combined: CombinedInfo;
+  onSelect: (tripId: string) => void;
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const selected = combined.trips.find((t) => t.tripId === combined.selectedTripId) || combined.trips[0];
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isOpen]);
+
+  const renderOption = (t: CombinedTripOption) => {
+    const active = t.tripId === selected.tripId;
+    return (
+      <button
+        key={t.tripId}
+        type="button"
+        onClick={() => {
+          onSelect(t.tripId);
+          setIsOpen(false);
+        }}
+        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer ${
+          active
+            ? "bg-emerald-500/10 text-[var(--text-primary)]"
+            : "hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-secondary)]"
+        }`}
+      >
+        <span
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 border"
+          style={{
+            backgroundColor: `${t.colorKey || "#22C55E"}20`,
+            borderColor: `${t.colorKey || "#22C55E"}40`,
+            color: t.colorKey || "#22C55E",
+          }}
+        >
+          {t.emoji || <Plane className="w-4 h-4" />}
+        </span>
+        <span className="flex-1 min-w-0 text-sm font-medium truncate">{t.name}</span>
+        {t.status === "completed" && (
+          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-black/5 dark:bg-white/10 text-[var(--text-muted)] shrink-0">
+            Done
+          </span>
+        )}
+        {active && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
+      </button>
+    );
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setIsOpen((v) => !v)}
+        className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+      >
+        <span
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 border"
+          style={{
+            backgroundColor: `${selected.colorKey || "#22C55E"}20`,
+            borderColor: `${selected.colorKey || "#22C55E"}40`,
+            color: selected.colorKey || "#22C55E",
+          }}
+        >
+          {selected.emoji || <Plane className="w-3.5 h-3.5" />}
+        </span>
+        <span className="text-sm font-medium text-[var(--text-primary)] max-w-[140px] truncate">
+          {selected.name}
+        </span>
+        <ChevronDown className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
+      </button>
+
+      {isOpen && (
+        <>
+          {/* Mobile: bottom-sheet style list */}
+          <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm sm:hidden" onClick={() => setIsOpen(false)} />
+          <div className="fixed inset-x-0 bottom-0 z-50 sm:hidden rounded-t-[28px] bg-white dark:bg-neutral-900 border-t border-black/10 dark:border-white/10 max-h-[70vh] overflow-y-auto pb-[env(safe-area-inset-bottom,0px)] shadow-2xl">
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-12 h-1.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
+            </div>
+            <div className="px-2 pb-2">{combined.trips.map(renderOption)}</div>
+          </div>
+
+          {/* Desktop: absolutely-positioned popover */}
+          <div className="hidden sm:block absolute right-0 mt-2 w-72 rounded-2xl bg-white dark:bg-neutral-900 border border-black/10 dark:border-white/10 shadow-2xl overflow-hidden z-50 py-1">
+            {combined.trips.map(renderOption)}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function FromTripPill({
+  name,
+  emoji,
+  colorKey,
+}: {
+  name: string;
+  emoji?: string;
+  colorKey?: string;
+}) {
+  const color = colorKey || "#22C55E";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full font-medium border max-w-[160px] px-2 py-0.5 text-[10px]"
+      style={{ backgroundColor: `${color}1F`, borderColor: `${color}40`, color }}
+      title={`From ${name}`}
+    >
+      {emoji ? <span className="shrink-0">{emoji}</span> : <Plane className="w-3 h-3 shrink-0" />}
+      <span className="truncate">From {name}</span>
+    </span>
+  );
+}
+
+function ExpenseRow({
+  exp,
+  formatAmount,
+  showDate,
+  formatExpenseDate,
+}: {
+  exp: RecentExpense;
+  formatAmount: (val: number) => string;
+  showDate: boolean;
+  formatExpenseDate: (val: string) => string;
+}) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+      {showDate && (
+        <div className="w-14 shrink-0 text-xs font-medium text-[var(--text-muted)]">
+          {formatExpenseDate(exp.date)}
+        </div>
+      )}
+      <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+        <span className="text-sm text-[var(--text-primary)] truncate">
+          {exp.note || "Expense"}
+        </span>
+        {exp.tags.map((tag) => (
+          <span
+            key={tag.name}
+            className="text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0"
+            style={{
+              backgroundColor: `${tag.colorKey}1F`,
+              borderColor: `${tag.colorKey}40`,
+              color: tag.colorKey,
+            }}
+          >
+            {tag.name}
+          </span>
+        ))}
+        {exp.sourceTrip && (
+          <FromTripPill
+            name={exp.sourceTrip.name}
+            emoji={exp.sourceTrip.emoji}
+            colorKey={exp.sourceTrip.colorKey}
+          />
+        )}
+      </div>
+      <div className="shrink-0 font-serif-display font-medium text-[var(--text-primary)]">
+        {formatAmount(exp.amount)}
+      </div>
+    </div>
+  );
+}
+
+function SharedDashboardContent({ shareId }: { shareId: string }) {
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
   const [data, setData] = useState<SharedData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(() => searchParams.get("tripId"));
 
   const { theme, toggleTheme } = useTheme();
 
@@ -46,11 +293,16 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
       try {
         const month = currentDate.getMonth() + 1;
         const year = currentDate.getFullYear();
-        const res = await fetch(`/api/share/${shareId}?month=${month}&year=${year}`);
+        const query = new URLSearchParams({ month: String(month), year: String(year) });
+        if (selectedTripId) query.set("tripId", selectedTripId);
+        const res = await fetch(`/api/share/${shareId}?${query.toString()}`);
         const result = await res.json();
-        
+
         if (res.ok && result.success) {
           setData(result.data);
+          if (result.data.combined && !selectedTripId) {
+            setSelectedTripId(result.data.combined.selectedTripId);
+          }
         } else {
           setError(result.error || "Failed to load shared dashboard.");
         }
@@ -63,7 +315,17 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
     };
 
     fetchSharedData();
-  }, [shareId, currentDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareId, currentDate, selectedTripId]);
+
+  const handleSelectTrip = (tripId: string) => {
+    if (tripId === selectedTripId) return;
+    setCurrentDate(new Date());
+    setSelectedTripId(tripId);
+    const query = new URLSearchParams(searchParams.toString());
+    query.set("tripId", tripId);
+    router.replace(`/share/${shareId}?${query.toString()}`);
+  };
 
   if (loading) {
     return <Loader fullScreen message="Loading shared dashboard..." showBrand />;
@@ -92,6 +354,33 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
       maximumFractionDigits: 0,
     }).format(val);
   };
+  const formatExpenseDate = (val: string) =>
+    new Date(val).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+
+  const isGeneral = data.trip.tripId === GENERAL_TRIP_ID;
+  const isFullMode = data.mode === "full";
+
+  const formatRange = (range: { from: string | null; to: string | null } | null) => {
+    if (!range?.from || !range?.to) return null;
+    const from = parseISO(range.from);
+    const to = parseISO(range.to);
+    const sameYear = from.getFullYear() === to.getFullYear();
+    return `${format(from, "d MMM")} – ${format(to, sameYear ? "d MMM yyyy" : "d MMM yyyy")}`;
+  };
+
+  const groupExpensesByDay = (list: RecentExpense[]) => {
+    const groups: { dateKey: string; label: string; items: RecentExpense[] }[] = [];
+    for (const exp of list) {
+      const dateKey = exp.date.slice(0, 10);
+      const last = groups[groups.length - 1];
+      if (last && last.dateKey === dateKey) {
+        last.items.push(exp);
+      } else {
+        groups.push({ dateKey, label: format(parseISO(exp.date), "EEE, d MMM"), items: [exp] });
+      }
+    }
+    return groups;
+  };
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 font-sans selection:bg-emerald-500/30">
@@ -102,22 +391,22 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
       </div>
 
       <main className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24 space-y-8">
-        
+
         {/* Top Navbar */}
         <div className="flex items-center justify-between mb-2">
           <Link href="/" className="flex items-center gap-2 group">
-            <Image 
-              src="/logo.png" 
-              alt="BudgetFlow Logo" 
-              width={40} 
-              height={40} 
+            <Image
+              src="/logo.png"
+              alt="BudgetFlow Logo"
+              width={40}
+              height={40}
               className="rounded-xl shadow-md group-hover:shadow-lg transition-all"
             />
             <span className="font-serif-display font-bold text-lg tracking-tight text-[var(--text-primary)]">
               BudgetFlow
             </span>
           </Link>
-          
+
           <button
             onClick={toggleTheme}
             className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
@@ -125,12 +414,38 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
             {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
         </div>
-        
-        <PageHeader 
+
+        <PageHeader
           title={<>{data.userName}&apos;s <em>Finances</em></>}
         />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {(!isGeneral || data.combined) && (
+          <div className="flex items-center justify-between gap-2 -mt-4">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 border"
+                style={{
+                  backgroundColor: `${data.trip.colorKey || "#22C55E"}20`,
+                  borderColor: `${data.trip.colorKey || "#22C55E"}40`,
+                  color: data.trip.colorKey || "#22C55E",
+                }}
+              >
+                {data.trip.emoji || <Plane className="w-4 h-4" />}
+              </span>
+              <span className="text-lg font-serif-display font-medium text-[var(--text-primary)] truncate">
+                {data.trip.name}
+              </span>
+              {data.trip.status === "completed" && (
+                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/10 text-[var(--text-muted)] shrink-0">
+                  Completed
+                </span>
+              )}
+            </div>
+            {data.combined && <TripSwitcher combined={data.combined} onSelect={handleSelectTrip} />}
+          </div>
+        )}
+
+        <div className={`grid grid-cols-1 ${data.totalSavings !== null ? "md:grid-cols-2" : ""} gap-6`}>
           {/* Spend Card */}
           <GlassCard variant="strong" className="p-6 sm:p-8 flex flex-col justify-center">
             <div className="flex items-center gap-3 mb-4">
@@ -138,28 +453,41 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
                 <TrendingDown className="w-5 h-5" />
               </div>
               <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                Spent in {data.month}
+                {isFullMode ? "Total trip spend" : `Spent in ${data.month}`}
               </h2>
             </div>
             <div className="text-4xl sm:text-5xl font-serif-display font-bold text-[var(--text-primary)] tracking-tight">
-              {formatAmount(data.totalSpentThisMonth)}
+              {formatAmount(isFullMode ? data.totalSpent : data.totalSpentThisMonth)}
             </div>
+            {isFullMode && (
+              <div className="mt-3 space-y-0.5">
+                {formatRange(data.range) && (
+                  <p className="text-sm text-[var(--text-secondary)]">{formatRange(data.range)}</p>
+                )}
+                <p className="text-xs text-[var(--text-muted)]">
+                  {data.expenseCount} expense{data.expenseCount === 1 ? "" : "s"}
+                  {data.dailyAverage != null && ` · ${formatAmount(data.dailyAverage)}/day`}
+                </p>
+              </div>
+            )}
           </GlassCard>
 
           {/* Savings Card */}
-          <GlassCard variant="strong" className="p-6 sm:p-8 flex flex-col justify-center">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5" />
+          {data.totalSavings !== null && (
+            <GlassCard variant="strong" className="p-6 sm:p-8 flex flex-col justify-center">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5" />
+                </div>
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                  Current Savings Balance
+                </h2>
               </div>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                Current Savings Balance
-              </h2>
-            </div>
-            <div className="text-4xl sm:text-5xl font-serif-display font-bold text-[var(--text-primary)] tracking-tight">
-              {formatAmount(data.totalSavings)}
-            </div>
-          </GlassCard>
+              <div className="text-4xl sm:text-5xl font-serif-display font-bold text-[var(--text-primary)] tracking-tight">
+                {formatAmount(data.totalSavings)}
+              </div>
+            </GlassCard>
+          )}
         </div>
 
         {/* Category Breakdown */}
@@ -174,57 +502,64 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
                   Category Breakdown
                 </h2>
                 <p className="text-sm text-[var(--text-muted)]">
-                  For {data.month} {data.year}
+                  {isFullMode ? "Whole trip" : `For ${data.month} ${data.year}`}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button 
-                onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer"
-              >
-                <ChevronLeft className="w-5 h-5" />
-              </button>
-              <span className="text-sm font-medium w-24 text-center text-[var(--text-primary)]">
-                {data.month} {data.year}
-              </span>
-              <button 
-                onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()}
-              >
-                <ChevronRight className="w-5 h-5" />
-              </button>
-            </div>
+            {!isFullMode && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                  className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-sm font-medium w-24 text-center text-[var(--text-primary)]">
+                  {data.month} {data.year}
+                </span>
+                <button
+                  onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                  className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                  disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()}
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            )}
           </div>
 
           {data.categoryBreakdown.length > 0 ? (
             <div className="space-y-4">
               {data.categoryBreakdown.map((cat) => (
                 <div key={cat.tagId} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                  <div 
+                  <div
                     className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
                     style={{ backgroundColor: `${cat.colorKey}20`, color: cat.colorKey }}
                   >
-                    <span className="text-sm font-bold">{cat.tagName.charAt(0).toUpperCase()}</span>
+                    <span className="text-sm font-bold">{cat.tagName.replace(/^[^\p{L}\p{N}]+/u, "").charAt(0).toUpperCase() || cat.tagName.charAt(0)}</span>
                   </div>
-                  
+
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="font-semibold text-[var(--text-primary)] truncate pr-4">
-                        {cat.tagName}
-                      </span>
+                    <div className="flex items-center justify-between mb-1.5 gap-3">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-semibold text-[var(--text-primary)] truncate">
+                          {cat.tagName}
+                        </span>
+                        {cat.isMirrored && (
+                          <FromTripPill name={cat.sourceTripName || cat.tagName} colorKey={cat.colorKey} />
+                        )}
+                      </div>
                       <span className="font-serif-display font-medium text-[var(--text-primary)] shrink-0">
                         {formatAmount(cat.total)}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center gap-3">
                       <div className="flex-1 h-1.5 rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
-                        <div 
+                        <div
                           className="h-full rounded-full transition-all duration-1000 ease-out"
-                          style={{ 
+                          style={{
                             width: `${Math.min(100, Math.max(0, parseFloat(cat.percentage)))}%`,
                             backgroundColor: cat.colorKey
                           }}
@@ -240,12 +575,69 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ shar
             </div>
           ) : (
             <div className="py-12 text-center text-[var(--text-muted)]">
-              No expenses recorded for this month.
+              {isFullMode ? "No expenses recorded for this trip." : "No expenses recorded for this month."}
+            </div>
+          )}
+        </GlassCard>
+
+        {/* Recent / All Expenses */}
+        <GlassCard variant="mid" className={`p-6 sm:p-8 transition-opacity duration-300 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <Receipt className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)]">
+                {isFullMode ? "All expenses" : "Recent Expenses"}
+              </h2>
+              <p className="text-sm text-[var(--text-muted)]">
+                {isFullMode ? "Whole trip" : `For ${data.month} ${data.year}`}
+              </p>
+            </div>
+          </div>
+
+          {data.recentExpenses.length > 0 ? (
+            isFullMode ? (
+              <div className="space-y-5">
+                {groupExpensesByDay(data.recentExpenses).map((group) => (
+                  <div key={group.dateKey}>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] px-3 mb-1.5">
+                      {group.label}
+                    </div>
+                    <div className="space-y-2">
+                      {group.items.map((exp, idx) => (
+                        <ExpenseRow key={idx} exp={exp} formatAmount={formatAmount} showDate={false} formatExpenseDate={formatExpenseDate} />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {data.recentExpenses.map((exp, idx) => (
+                  <ExpenseRow key={idx} exp={exp} formatAmount={formatAmount} showDate formatExpenseDate={formatExpenseDate} />
+                ))}
+              </div>
+            )
+          ) : (
+            <div className="py-12 text-center text-[var(--text-muted)]">
+              {isFullMode ? "No expenses recorded for this trip." : "No expenses recorded for this month."}
             </div>
           )}
         </GlassCard>
 
       </main>
     </div>
+  );
+}
+
+export default function SharedDashboardPage({ params }: { params: Promise<{ shareId: string }> }) {
+  // Unwrap params according to Next.js 15+ conventions
+  const { shareId } = use(params);
+
+  return (
+    <Suspense fallback={<Loader fullScreen message="Loading shared dashboard..." showBrand />}>
+      <SharedDashboardContent shareId={shareId} />
+    </Suspense>
   );
 }

@@ -35,6 +35,19 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const body = await req.json().catch(() => ({} as { tripId?: unknown }));
+    const tripId = typeof body?.tripId === "string" && body.tripId ? body.tripId : undefined;
+
+    if (tripId) {
+      // Trip-scoped clear — savings are global, so leave them alone.
+      const expResult = await Expense.deleteMany({ userId, tripId });
+      return NextResponse.json({
+        success: true,
+        deletedExpenses: expResult.deletedCount,
+        deletedSavings: 0,
+      });
+    }
+
     // Delete both expenses AND savings so a full reset is truly complete
     const [expResult, savResult] = await Promise.all([
       Expense.deleteMany({ userId }),

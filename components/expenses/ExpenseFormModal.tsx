@@ -14,6 +14,7 @@ import {
   X,
   PiggyBank,
   ArrowDownLeft,
+  AlertTriangle,
 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -21,6 +22,8 @@ import { db, LocalExpense, LocalTag, LocalSaving } from "@/lib/offline/db";
 import { queueExpenseCreation, queueExpenseUpdate, queueTagCreation, queueSavingCreation, queueSavingUpdate, queueSavingDeletion } from "@/lib/offline/syncQueue";
 import { useAuth } from "@/context/AuthContext";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useTrip } from "@/context/TripContext";
+import { GENERAL_TRIP_ID } from "@/lib/trips";
 import { formatAmountInput, parseAmountInput } from "@/lib/currency";
 import toast from "react-hot-toast";
 
@@ -52,7 +55,15 @@ export function ExpenseFormModal({
 }: ExpenseFormModalProps) {
   const { user } = useAuth();
   const { currencyInfo } = useCurrency();
+  const { activeTripId, getTrip } = useTrip();
   const userId = user?.id || "local_user";
+
+  // Defensive: if this modal is ever opened with an expense that belongs to a different
+  // trip than the active one, keep working with that expense's own trip — not the active one —
+  // for tag filtering/stamping, and warn the user it can't be reassigned here.
+  const formTripId = initialExpense?.tripId || activeTripId;
+  const isCrossTrip = Boolean(initialExpense && formTripId !== activeTripId);
+  const formTrip = isCrossTrip ? getTrip(formTripId) : undefined;
 
   const [amount, setAmount] = useState<string>("");
   const [note, setNote] = useState<string>("");
@@ -66,17 +77,18 @@ export function ExpenseFormModal({
   const [fromSavings, setFromSavings] = useState<boolean>(false);
   const [linkedSaving, setLinkedSaving] = useState<LocalSaving | null>(null);
 
-  // Live tags from Dexie — deduplicated by lowercase name to avoid server+local duplicates
+  // Live tags from Dexie, scoped to the active trip — deduplicated by lowercase name to avoid server+local duplicates
   const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
   const tags = useMemo(() => {
+    const tripTags = rawTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === formTripId);
     const seen = new Set<string>();
-    return rawTags.filter((t) => {
+    return tripTags.filter((t) => {
       const key = t.name.toLowerCase().trim();
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
-  }, [rawTags]);
+  }, [rawTags, formTripId]);
 
   // Live savings balance (all-time) to display inside the modal
   const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
@@ -220,6 +232,7 @@ export function ExpenseFormModal({
         userId,
         name,
         colorKey: randomColor,
+        tripId: formTripId,
       };
 
       await queueTagCreation(newTag);
@@ -295,6 +308,7 @@ export function ExpenseFormModal({
           createdAt: now,
           updatedAt: now,
           syncStatus: "pending",
+          tripId: formTripId,
         };
         await queueExpenseCreation(newExpense);
 
@@ -363,6 +377,16 @@ export function ExpenseFormModal({
       }
     >
       <form onSubmit={handleSubmit} className="space-y-4">
+        {isCrossTrip && (
+          <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+            <p className="text-xs leading-relaxed">
+              This expense belongs to {formTrip?.emoji ? `${formTrip.emoji} ` : ""}
+              {formTrip?.name || "another trip"}. It will stay in that trip when saved.
+            </p>
+          </div>
+        )}
+
         {/* Hero Amount Card */}
         <div className="p-4 sm:p-5 rounded-2xl bg-white/80 dark:bg-black/25 border border-emerald-500/30 dark:border-emerald-500/20 shadow-xs focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/15 focus-within:bg-white dark:focus-within:bg-black/40 transition-all">
           <label className="block text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1.5">

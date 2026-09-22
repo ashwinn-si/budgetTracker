@@ -24,6 +24,8 @@ import { db, LocalExpense } from "@/lib/offline/db";
 import { useAuth } from "@/context/AuthContext";
 import { useLoading } from "@/context/LoadingContext";
 import { useCurrency } from "@/context/CurrencyContext";
+import { useTrip } from "@/context/TripContext";
+import { filterExpensesForTrip, GENERAL_TRIP_ID } from "@/lib/trips";
 import { SpendingActivityChart } from "@/components/dashboard/SpendingActivityChart";
 import toast from "react-hot-toast";
 import { DateRangeFilter, PeriodPreset } from "@/components/dashboard/DateRangeFilter";
@@ -35,6 +37,7 @@ function DashboardContent() {
   const { syncNow, isSyncing } = useAuth().syncStatus;
   const { startLoading, stopLoading } = useLoading();
   const { formatAmount, currencyInfo } = useCurrency();
+  const { trips, activeTripId, activeTrip } = useTrip();
 
   const [isAddExpenseOpen, setIsAddExpenseOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
@@ -46,13 +49,26 @@ function DashboardContent() {
   const selectedTagsParam = searchParams.get("tags")?.split(",").filter(Boolean) || [];
 
   // Live query from Dexie IndexedDB
-  const allExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
+  const rawExpenses = useLiveQuery(() => db.expenses.toArray(), []) || [];
   const allSavings = useLiveQuery(() => db.savings.toArray(), []) || [];
-  const allTags = useLiveQuery(() => db.tags.toArray(), []) || [];
+  const rawTags = useLiveQuery(() => db.tags.toArray(), []) || [];
 
+  // Scoped to the active trip (own + mirrored-in expenses)
+  const allExpenses = useMemo(
+    () => filterExpensesForTrip(rawExpenses, activeTripId, trips).all,
+    [rawExpenses, activeTripId, trips]
+  );
+
+  // Tags belonging to the active trip only
+  const allTags = useMemo(
+    () => rawTags.filter((t) => (t.tripId || GENERAL_TRIP_ID) === activeTripId),
+    [rawTags, activeTripId]
+  );
+
+  // Lookup over ALL tags (across trips) so mirrored expenses keep their tag labels/colors
   const tagMap = useMemo(() => {
-    return new Map(allTags.map((t) => [t._id, t]));
-  }, [allTags]);
+    return new Map(rawTags.map((t) => [t._id, t]));
+  }, [rawTags]);
 
   // Compute date ranges
   const dateRanges = useMemo(() => {
@@ -110,10 +126,14 @@ function DashboardContent() {
     allExpenses.forEach((exp) => {
       const expDate = new Date(exp.date);
 
-      // Filter by tag if tags are selected
+      // Filter by tag (or virtual "trip:<id>" filter) if any are selected
       if (selectedTagsParam.length > 0) {
-        const hasTag = exp.tagIds?.some((tId) => selectedTagsParam.includes(tId));
-        if (!hasTag) return;
+        const hasMatch = selectedTagsParam.some((sel) =>
+          sel.startsWith("trip:")
+            ? (exp.tripId || GENERAL_TRIP_ID) === sel.slice(5)
+            : exp.tagIds?.includes(sel)
+        );
+        if (!hasMatch) return;
       }
 
       if (expDate >= start && expDate <= end) {
@@ -161,11 +181,22 @@ function DashboardContent() {
     return { totalSaved, totalFromSavings, balance: totalSaved - totalFromSavings };
   }, [allSavings]);
 
-  // Tag Breakdown
+  // Tag Breakdown — own expenses group by tag, mirrored expenses group into a
+  // virtual per-source-trip category since their tags belong to another trip.
   const categoryBreakdown = useMemo(() => {
     const map: Record<string, { total: number; count: number }> = {};
 
     currentExpenses.forEach((exp) => {
+      const expTripId = exp.tripId || GENERAL_TRIP_ID;
+      if (expTripId !== activeTripId) {
+        const key = `trip:${expTripId}`;
+        map[key] = {
+          total: (map[key]?.total || 0) + exp.amount,
+          count: (map[key]?.count || 0) + 1,
+        };
+        return;
+      }
+
       if (!exp.tagIds || exp.tagIds.length === 0) {
         map["uncategorized"] = {
           total: (map["uncategorized"]?.total || 0) + exp.amount,
@@ -182,11 +213,23 @@ function DashboardContent() {
     });
 
     return Object.entries(map)
-      .map(([tagId, data]) => {
-        const tag = tagMap.get(tagId);
+      .map(([key, data]) => {
         const percentage = totalSpend > 0 ? (data.total / totalSpend) * 100 : 0;
+        if (key.startsWith("trip:")) {
+          const sourceTripId = key.slice(5);
+          const sourceTrip = trips.find((t) => t.tripId === sourceTripId);
+          return {
+            tagId: key,
+            name: `${sourceTrip?.emoji ? `${sourceTrip.emoji} ` : "✈ "}${sourceTrip?.name || "Trip"}`,
+            colorKey: sourceTrip?.colorKey || "#7A8C7C",
+            total: data.total,
+            count: data.count,
+            percentage: Math.round(percentage * 10) / 10,
+          };
+        }
+        const tag = tagMap.get(key);
         return {
-          tagId,
+          tagId: key,
           name: tag?.name || "Uncategorized",
           colorKey: tag?.colorKey || "#7A8C7C",
           total: data.total,
@@ -195,7 +238,33 @@ function DashboardContent() {
         };
       })
       .sort((a, b) => b.total - a.total);
-  }, [currentExpenses, tagMap, totalSpend]);
+  }, [currentExpenses, tagMap, totalSpend, activeTripId, trips]);
+
+  // Mirrored (cross-trip) spend included in the current totals, for the secondary totals line
+  const mirroredSummary = useMemo(() => {
+    const mirroredExpenses = currentExpenses.filter((exp) => (exp.tripId || GENERAL_TRIP_ID) !== activeTripId);
+    const total = mirroredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
+    const tripIds = new Set(mirroredExpenses.map((exp) => exp.tripId || GENERAL_TRIP_ID));
+    return { total, tripCount: tripIds.size };
+  }, [currentExpenses, activeTripId]);
+
+  // Tag filter options: this trip's own tags plus a virtual option per source trip mirroring in
+  const tagFilterOptions = useMemo(() => {
+    const sourceTripIds = new Set<string>();
+    allExpenses.forEach((exp) => {
+      const tripId = exp.tripId || GENERAL_TRIP_ID;
+      if (tripId !== activeTripId) sourceTripIds.add(tripId);
+    });
+    const tripOptions = Array.from(sourceTripIds).map((tripId) => {
+      const trip = trips.find((t) => t.tripId === tripId);
+      return {
+        _id: `trip:${tripId}`,
+        name: `${trip?.emoji ? `${trip.emoji} ` : "✈ "}${trip?.name || "Trip"}`,
+        colorKey: trip?.colorKey || "#7A8C7C",
+      };
+    });
+    return [...allTags, ...tripOptions];
+  }, [allTags, allExpenses, activeTripId, trips]);
 
   // Filter actions
   const handleSelectPeriod = (preset: PeriodPreset, customStart?: Date, customEnd?: Date) => {
@@ -244,6 +313,7 @@ function DashboardContent() {
       const queryParams = new URLSearchParams();
       queryParams.set("startDate", startStr);
       queryParams.set("endDate", endStr);
+      queryParams.set("tripId", activeTripId);
       if (selectedTagsParam.length > 0) {
         queryParams.set("tagIds", selectedTagsParam.join(","));
         const names = selectedTagsParam
@@ -296,6 +366,12 @@ function DashboardContent() {
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-medium text-[var(--text-primary)] tracking-tight">
             Financial <em>Pacing</em>
           </h1>
+          {activeTripId !== GENERAL_TRIP_ID && (
+            <span className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+              {activeTrip.emoji && <span>{activeTrip.emoji}</span>}
+              <span>{activeTrip.name}</span>
+            </span>
+          )}
         </div>
 
         <div className="hidden sm:flex items-center gap-2">
@@ -398,10 +474,10 @@ function DashboardContent() {
           </div>
         </div>
 
-        {allTags.length > 0 && (
+        {tagFilterOptions.length > 0 && (
           <div className="pt-2 border-t border-black/[0.04] dark:border-white/[0.06]">
             <TagFilter
-              tags={allTags}
+              tags={tagFilterOptions}
               selectedTagIds={selectedTagsParam}
               onToggleTag={handleToggleTag}
               onSelectAll={handleSelectAllTags}
@@ -445,7 +521,13 @@ function DashboardContent() {
               >
                 {currentExpenses.length > 0 ? formatAmount(totalSpend) : "—"}
               </span>
-              <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">this period</span>
+              <span className="text-[11px] text-[var(--text-muted)] mt-1.5 truncate block">
+                {mirroredSummary.tripCount > 0
+                  ? `Includes ${formatAmount(mirroredSummary.total)} from ${mirroredSummary.tripCount} linked trip${
+                      mirroredSummary.tripCount === 1 ? "" : "s"
+                    }`
+                  : "this period"}
+              </span>
             </div>
 
             {/* Transactions */}
