@@ -154,11 +154,124 @@ export async function POST(req: NextRequest) {
         }
       }
     } else if (entityType === "trip") {
-      // Restoring a whole trip (its own doc, tags, and expenses) is a later phase.
-      return NextResponse.json(
-        { error: "Trip recovery is not supported yet." },
-        { status: 400 }
+      const tripSnapshot = (data.trip || {}) as Record<string, unknown>;
+      const tagsSnapshot = Array.isArray(data.tags) ? (data.tags as Record<string, unknown>[]) : [];
+      const expensesSnapshot = Array.isArray(data.expenses)
+        ? (data.expenses as Record<string, unknown>[])
+        : [];
+
+      const restoredTripId =
+        (typeof tripSnapshot.tripId === "string" && tripSnapshot.tripId) || log.entityId;
+      if (!restoredTripId || restoredTripId === GENERAL_TRIP_ID) {
+        return NextResponse.json({ error: "Invalid trip snapshot" }, { status: 400 });
+      }
+
+      const existingTrips = await Trip.find({ userId }).lean();
+      const existingTripIds = new Set(existingTrips.map((t) => t.tripId));
+      existingTripIds.add(restoredTripId);
+
+      const rawMirror = Array.isArray(tripSnapshot.mirrorToTripIds)
+        ? (tripSnapshot.mirrorToTripIds as unknown[])
+        : [];
+      const mirrorToTripIds = rawMirror
+        .map((id) => String(id))
+        .filter((id) => existingTripIds.has(id) && id !== restoredTripId);
+
+      // Sharing is not restored — the owner must re-enable it manually.
+      await Trip.findOneAndUpdate(
+        { userId, tripId: restoredTripId },
+        {
+          $set: {
+            userId,
+            tripId: restoredTripId,
+            name:
+              typeof tripSnapshot.name === "string" && tripSnapshot.name.trim()
+                ? tripSnapshot.name.trim()
+                : "Trip",
+            emoji: typeof tripSnapshot.emoji === "string" ? tripSnapshot.emoji : "",
+            colorKey: typeof tripSnapshot.colorKey === "string" ? tripSnapshot.colorKey : "#22C55E",
+            status: tripSnapshot.status === "completed" ? "completed" : "active",
+            completedAt: tripSnapshot.completedAt ? new Date(tripSnapshot.completedAt as string) : null,
+            mirrorToTripIds,
+            startDate: tripSnapshot.startDate ? new Date(tripSnapshot.startDate as string) : null,
+            endDate: tripSnapshot.endDate ? new Date(tripSnapshot.endDate as string) : null,
+          },
+          $setOnInsert: { isDefault: false },
+        },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
       );
+
+      const tagIdMap = new Map<string, mongoose.Types.ObjectId>();
+      for (const tagSnap of tagsSnapshot) {
+        const name = typeof tagSnap.name === "string" ? tagSnap.name.trim() : "";
+        if (!name) continue;
+        const colorKey = typeof tagSnap.colorKey === "string" ? tagSnap.colorKey : "#22C55E";
+        const clientId = typeof tagSnap.clientId === "string" ? tagSnap.clientId : undefined;
+        const oldId = tagSnap._id ? String(tagSnap._id) : undefined;
+
+        const tag = await Tag.findOneAndUpdate(
+          { userId, tripId: restoredTripId, name },
+          {
+            $set: {
+              userId,
+              tripId: restoredTripId,
+              name,
+              colorKey,
+              ...(clientId ? { clientId } : {}),
+            },
+          },
+          { upsert: true, new: true }
+        );
+        if (oldId && tag) tagIdMap.set(oldId, tag._id as mongoose.Types.ObjectId);
+      }
+
+      let expenseCount = 0;
+      for (const expSnap of expensesSnapshot) {
+        const clientId =
+          (typeof expSnap.clientId === "string" && expSnap.clientId) ||
+          (expSnap._id ? String(expSnap._id) : undefined);
+        if (!clientId) continue;
+
+        const amount = Number(expSnap.amount) || 0;
+        const note = typeof expSnap.note === "string" ? expSnap.note.trim() : "";
+        const date = expSnap.date ? new Date(expSnap.date as string) : new Date();
+
+        const rawTagIds = Array.isArray(expSnap.tagIds) ? (expSnap.tagIds as unknown[]) : [];
+        const remappedTagIds: mongoose.Types.ObjectId[] = [];
+        for (const tid of rawTagIds) {
+          const newId = tagIdMap.get(String(tid));
+          if (newId) remappedTagIds.push(newId);
+        }
+
+        await Expense.findOneAndUpdate(
+          { userId, clientId },
+          {
+            $set: {
+              userId,
+              clientId,
+              amount,
+              note,
+              tagIds: remappedTagIds,
+              date,
+              tripId: restoredTripId,
+              syncStatus: "synced",
+              updatedAt: new Date(),
+            },
+          },
+          { upsert: true, new: true }
+        );
+        expenseCount += 1;
+      }
+
+      await DeleteLog.deleteOne({ _id: log._id });
+
+      return NextResponse.json({
+        success: true,
+        message: "trip recovered successfully",
+        entityType,
+        entityId: restoredTripId,
+        counts: { tags: tagIdMap.size, expenses: expenseCount },
+      });
     }
 
     // Remove the delete log entry once recovered

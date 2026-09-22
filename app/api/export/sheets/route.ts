@@ -6,6 +6,12 @@ import { Tag } from "@/models/Tag";
 import { User } from "@/models/User";
 import { getCurrentUser } from "@/lib/auth";
 import { getCurrencyInfo } from "@/lib/currency";
+import { listTripsSorted } from "@/lib/server/trips";
+import { GENERAL_TRIP_ID, getVisibleTripIds, tripIdMatchValues } from "@/lib/trips";
+
+function sanitizeSheetTitle(title: string): string {
+  return title.replace(/[[\]*?/\\:]/g, "").slice(0, 100);
+}
 
 function formatDateDisplay(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
@@ -77,6 +83,7 @@ export async function POST(req: NextRequest) {
     let endDateParam: string | null = null;
     let tagIdsParam: string[] = [];
     let isFresh = false;
+    let tripIdParam = GENERAL_TRIP_ID;
 
     try {
       const body = await req.json();
@@ -85,6 +92,9 @@ export async function POST(req: NextRequest) {
         endDateParam = body.endDate || null;
         if (Array.isArray(body.tagIds)) {
           tagIdsParam = body.tagIds;
+        }
+        if (typeof body.tripId === "string" && body.tripId.trim()) {
+          tripIdParam = body.tripId.trim();
         }
         if (body.action === "fresh" || body.reset === true || body.fresh === true) {
           isFresh = true;
@@ -103,6 +113,10 @@ export async function POST(req: NextRequest) {
         if (qTagIds) tagIdsParam = qTagIds;
       }
     }
+    if (tripIdParam === GENERAL_TRIP_ID) {
+      const qTripId = url.searchParams.get("tripId")?.trim();
+      if (qTripId) tripIdParam = qTripId;
+    }
     if (!isFresh) {
       const qAction = url.searchParams.get("action");
       const qReset = url.searchParams.get("reset");
@@ -110,6 +124,12 @@ export async function POST(req: NextRequest) {
         isFresh = true;
       }
     }
+
+    const userTrips = await listTripsSorted(userId);
+    const tripsById = new Map(userTrips.map((t) => [t.tripId, t]));
+    const activeTripDoc = tripsById.get(tripIdParam);
+    const isGeneralTrip = tripIdParam === GENERAL_TRIP_ID;
+    const activeTripName = activeTripDoc?.name || (isGeneralTrip ? "General" : "Trip");
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const filter: any = { userId };
@@ -130,6 +150,9 @@ export async function POST(req: NextRequest) {
       filter.tagIds = { $in: tagIdsParam };
     }
 
+    const visibleTripIds = getVisibleTripIds(userTrips, tripIdParam);
+    filter.tripId = { $in: tripIdMatchValues(visibleTripIds) };
+
     // Fetch user's expenses sorted oldest first
     const expenses = await Expense.find(filter)
       .sort({ date: 1 })
@@ -138,7 +161,8 @@ export async function POST(req: NextRequest) {
 
     const currencyInfo = getCurrencyInfo(user?.currency);
 
-    // Prepare expenses data
+    // Prepare expenses data; mirrored rows are labelled "From <trip>" and grouped
+    // under the source trip for the Summary tab, matching the dashboard's behaviour.
     const expensesData = expenses.map((exp) => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rawTags: any[] = (exp.tagIds as any[]) || [];
@@ -146,11 +170,29 @@ export async function POST(req: NextRequest) {
         .map((t) => (typeof t === "object" ? t.name : String(t)))
         .filter(Boolean);
 
+      const expTripId = (exp.tripId as string) || GENERAL_TRIP_ID;
+      const isMirrored = expTripId !== tripIdParam;
+
+      if (isMirrored) {
+        const sourceTrip = tripsById.get(expTripId);
+        const sourceName = sourceTrip?.name || "Trip";
+        const groupLabel = sourceTrip?.emoji ? `${sourceTrip.emoji} ${sourceName}` : `✈ ${sourceName}`;
+        return {
+          date: new Date(exp.date),
+          dateStr: formatDateISO(new Date(exp.date)),
+          note: exp.note || "",
+          tags: [`From ${sourceName}`, ...tags].sort(),
+          groupTags: [groupLabel],
+          amount: typeof exp.amount === "number" ? exp.amount : parseFloat(exp.amount) || 0,
+        };
+      }
+
       return {
         date: new Date(exp.date),
         dateStr: formatDateISO(new Date(exp.date)),
         note: exp.note || "",
         tags: tags.length > 0 ? [...tags].sort() : ["Uncategorized"],
+        groupTags: tags.length > 0 ? tags : ["Uncategorized"],
         amount: typeof exp.amount === "number" ? exp.amount : parseFloat(exp.amount) || 0,
       };
     });
@@ -245,7 +287,7 @@ export async function POST(req: NextRequest) {
     let grandTagSum = 0;
 
     for (const exp of expensesData) {
-      for (const tag of exp.tags) {
+      for (const tag of exp.groupTags) {
         const existing = tagAggregation.get(tag) || { total: 0, count: 0 };
         existing.total += exp.amount;
         existing.count += 1;
@@ -300,10 +342,16 @@ export async function POST(req: NextRequest) {
     ]);
 
     const sheetTitle = `Budget Tracker Export — ${startFileStr} to ${endFileStr}`;
+    const expensesTabTitle = isGeneralTrip
+      ? "Expenses"
+      : sanitizeSheetTitle(`Expenses — ${activeTripName}`);
+    const summaryTabTitle = isGeneralTrip
+      ? "Summary by Tag"
+      : sanitizeSheetTitle(`Summary — ${activeTripName}`);
 
     let spreadsheetId = user.sheetsSpreadsheetId || null;
-    let expensesSheetId = 0;
-    let summarySheetId = 1;
+    let expensesSheetId: number | null = null;
+    let summarySheetId: number | null = null;
     let isUpdate = false;
 
     // If user requested a fresh sync, delete the old file from Google Drive first
@@ -331,10 +379,10 @@ export async function POST(req: NextRequest) {
         const existingSheets = existingRes.data.sheets || [];
 
         existingExpSheet = existingSheets.find(
-          (s) => s.properties?.title === "Expenses"
+          (s) => s.properties?.title === expensesTabTitle
         );
         existingSumSheet = existingSheets.find(
-          (s) => s.properties?.title === "Summary by Tag"
+          (s) => s.properties?.title === summaryTabTitle
         );
 
         if (existingExpSheet?.properties?.sheetId != null) {
@@ -344,15 +392,13 @@ export async function POST(req: NextRequest) {
           summarySheetId = existingSumSheet.properties.sheetId;
         }
 
-        // If tabs are missing from the existing sheet, add them
+        // If tabs are missing from the existing sheet, add them (letting Google assign real sheetIds)
         const addSheetRequests: any[] = [];
         if (!existingExpSheet) {
-          expensesSheetId = 0;
           addSheetRequests.push({
             addSheet: {
               properties: {
-                sheetId: expensesSheetId,
-                title: "Expenses",
+                title: expensesTabTitle,
                 tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
                 gridProperties: { frozenRowCount: 6 },
               },
@@ -360,12 +406,10 @@ export async function POST(req: NextRequest) {
           });
         }
         if (!existingSumSheet) {
-          summarySheetId = 1;
           addSheetRequests.push({
             addSheet: {
               properties: {
-                sheetId: summarySheetId,
-                title: "Summary by Tag",
+                title: summaryTabTitle,
                 tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
                 gridProperties: { frozenRowCount: 4, hideGridlines: true },
               },
@@ -374,17 +418,24 @@ export async function POST(req: NextRequest) {
         }
 
         if (addSheetRequests.length > 0) {
-          await sheets.spreadsheets.batchUpdate({
+          const addRes = await sheets.spreadsheets.batchUpdate({
             spreadsheetId,
             requestBody: { requests: addSheetRequests },
           });
+          const replies = addRes.data.replies || [];
+          for (const reply of replies) {
+            const props = reply.addSheet?.properties;
+            if (!props) continue;
+            if (props.title === expensesTabTitle) expensesSheetId = props.sheetId ?? expensesSheetId;
+            if (props.title === summaryTabTitle) summarySheetId = props.sheetId ?? summarySheetId;
+          }
         }
 
-        // Clear existing data ranges so stale entries are removed
+        // Clear existing data ranges so stale entries are removed (only this trip's tabs)
         await sheets.spreadsheets.values.batchClear({
           spreadsheetId,
           requestBody: {
-            ranges: ["'Expenses'!A:Z", "'Summary by Tag'!A:Z"],
+            ranges: [`'${expensesTabTitle}'!A:Z`, `'${summaryTabTitle}'!A:Z`],
           },
         });
 
@@ -413,7 +464,7 @@ export async function POST(req: NextRequest) {
             {
               properties: {
                 sheetId: expensesSheetId,
-                title: "Expenses",
+                title: expensesTabTitle,
                 tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
                 gridProperties: {
                   frozenRowCount: 6,
@@ -423,7 +474,7 @@ export async function POST(req: NextRequest) {
             {
               properties: {
                 sheetId: summarySheetId,
-                title: "Summary by Tag",
+                title: summaryTabTitle,
                 tabColor: { red: 0.133, green: 0.773, blue: 0.369 },
                 gridProperties: {
                   frozenRowCount: 4,
@@ -445,6 +496,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Safety fallback: should always be set by the lookup/create paths above
+    if (expensesSheetId == null) expensesSheetId = 0;
+    if (summarySheetId == null) summarySheetId = 1;
+
     // Populate data in both tabs
     await sheets.spreadsheets.values.batchUpdate({
       spreadsheetId,
@@ -452,11 +507,11 @@ export async function POST(req: NextRequest) {
         valueInputOption: "USER_ENTERED",
         data: [
           {
-            range: `'Expenses'!A1:D${expensesRows.length}`,
+            range: `'${expensesTabTitle}'!A1:D${expensesRows.length}`,
             values: expensesRows,
           },
           {
-            range: `'Summary by Tag'!A1:D${summaryRows.length}`,
+            range: `'${summaryTabTitle}'!A1:D${summaryRows.length}`,
             values: summaryRows,
           },
         ],

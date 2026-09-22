@@ -7,6 +7,17 @@ import { Saving } from "@/models/Saving";
 import { User } from "@/models/User";
 import { getCurrentUser } from "@/lib/auth";
 import { getExcelCurrencyFormat } from "@/lib/currency";
+import { listTripsSorted } from "@/lib/server/trips";
+import { GENERAL_TRIP_ID, getVisibleTripIds, tripIdMatchValues } from "@/lib/trips";
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 40);
+}
 
 function formatDateDisplay(date: Date): string {
   const day = String(date.getDate()).padStart(2, "0");
@@ -29,6 +40,12 @@ export async function GET(req: NextRequest) {
 
     let userCurrency = "INR";
     let dbConnected = false;
+    let activeTripName = "General";
+    let activeTripEmoji = "";
+    let isGeneralTrip = true;
+
+    const { searchParams } = new URL(req.url);
+    const tripIdParam = searchParams.get("tripId")?.trim() || GENERAL_TRIP_ID;
 
     try {
       const db = await connectToDatabase();
@@ -43,7 +60,6 @@ export async function GET(req: NextRequest) {
       console.warn("DB connection warning during export:", err);
     }
 
-    const { searchParams } = new URL(req.url);
     const startDateParam = searchParams.get("startDate");
     const endDateParam = searchParams.get("endDate");
     const tagIdsParam = searchParams.get("tagIds")?.split(",").filter(Boolean);
@@ -76,6 +92,7 @@ export async function GET(req: NextRequest) {
       date: Date;
       note: string;
       tags: string[];
+      groupTags: string[];
       amount: number;
       isSaving?: boolean;
       fromSavings?: boolean;
@@ -85,6 +102,18 @@ export async function GET(req: NextRequest) {
     let resolvedTagNames: string[] = tagNamesParam || [];
 
     if (dbConnected) {
+      const userTrips = userSession?.userId ? await listTripsSorted(userId) : [];
+      const activeTripDoc = userTrips.find((t) => t.tripId === tripIdParam);
+      isGeneralTrip = tripIdParam === GENERAL_TRIP_ID;
+      activeTripName = activeTripDoc?.name || (isGeneralTrip ? "General" : "Trip");
+      activeTripEmoji = activeTripDoc?.emoji || "";
+      const tripsById = new Map(userTrips.map((t) => [t.tripId, t]));
+
+      if (userTrips.length > 0) {
+        const visibleTripIds = getVisibleTripIds(userTrips, tripIdParam);
+        filter.tripId = { $in: tripIdMatchValues(visibleTripIds) };
+      }
+
       // Fetch user's expenses sorted oldest first as required by spec
       const expenses = await Expense.find(filter)
         .sort({ date: 1 })
@@ -98,10 +127,27 @@ export async function GET(req: NextRequest) {
           .map((t) => (typeof t === "object" ? t.name : String(t)))
           .filter(Boolean);
 
+        const expTripId = (exp.tripId as string) || GENERAL_TRIP_ID;
+        const isMirrored = expTripId !== tripIdParam;
+
+        if (isMirrored) {
+          const sourceTrip = tripsById.get(expTripId);
+          const sourceName = sourceTrip?.name || "Trip";
+          const groupLabel = sourceTrip?.emoji ? `${sourceTrip.emoji} ${sourceName}` : `✈ ${sourceName}`;
+          return {
+            date: new Date(exp.date),
+            note: exp.note || "No note",
+            tags: [`From ${sourceName}`, ...tags],
+            groupTags: [groupLabel],
+            amount: typeof exp.amount === "number" ? exp.amount : parseFloat(exp.amount) || 0,
+          };
+        }
+
         return {
           date: new Date(exp.date),
           note: exp.note || "No note",
           tags: tags.length > 0 ? tags : ["Uncategorized"],
+          groupTags: tags.length > 0 ? tags : ["Uncategorized"],
           amount: typeof exp.amount === "number" ? exp.amount : parseFloat(exp.amount) || 0,
         };
       });
@@ -110,13 +156,14 @@ export async function GET(req: NextRequest) {
       if (filter.date) {
         savingFilter.date = filter.date;
       }
-      const savings = await Saving.find(savingFilter).sort({ date: 1 }).lean();
-      
+      const savings = isGeneralTrip ? await Saving.find(savingFilter).sort({ date: 1 }).lean() : [];
+
       const savingsData = savings.map((sav) => {
         return {
           date: new Date(sav.date),
           note: sav.note || "No note",
           tags: [], // Savings don't have tags natively in the new schema
+          groupTags: [],
           amount: typeof sav.amount === "number" ? sav.amount : parseFloat(sav.amount as any) || 0,
           isSaving: sav.type === "deposit",
           fromSavings: sav.type === "withdrawal",
@@ -134,11 +181,11 @@ export async function GET(req: NextRequest) {
     } else if (userId === "demo_user" || userSession?.email === "user@gmail.com") {
       // Offline / dev fallback sample data for demo user (sorted oldest first)
       expensesData = [
-        { date: new Date("2026-09-08"), note: "Transit metro card", tags: ["Transport"], amount: 32.0 },
-        { date: new Date("2026-09-12"), note: "Bouldering & gym membership", tags: ["Health & Gym"], amount: 65.0 },
-        { date: new Date("2026-09-15"), note: "Fiber broadband & electricity", tags: ["Housing & Bills"], amount: 145.0 },
-        { date: new Date("2026-09-17"), note: "Artisan espresso & pastry", tags: ["Dining & Coffee"], amount: 14.2 },
-        { date: new Date("2026-09-18"), note: "Organic Market groceries", tags: ["Groceries"], amount: 84.5 },
+        { date: new Date("2026-09-08"), note: "Transit metro card", tags: ["Transport"], groupTags: ["Transport"], amount: 32.0 },
+        { date: new Date("2026-09-12"), note: "Bouldering & gym membership", tags: ["Health & Gym"], groupTags: ["Health & Gym"], amount: 65.0 },
+        { date: new Date("2026-09-15"), note: "Fiber broadband & electricity", tags: ["Housing & Bills"], groupTags: ["Housing & Bills"], amount: 145.0 },
+        { date: new Date("2026-09-17"), note: "Artisan espresso & pastry", tags: ["Dining & Coffee"], groupTags: ["Dining & Coffee"], amount: 14.2 },
+        { date: new Date("2026-09-18"), note: "Organic Market groceries", tags: ["Groceries"], groupTags: ["Groceries"], amount: 84.5 },
       ];
     }
 
@@ -212,8 +259,11 @@ export async function GET(req: NextRequest) {
     r4.value = `Generated: ${new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}`;
     r4.font = { size: 10.5, name: "Calibri", color: { argb: "FF6B7280" } };
 
-    // Row 5: Blank spacer
-    expensesSheet.getRow(5).height = 12;
+    // Row 5: Trip metadata (was a blank spacer; header row alignment is unaffected)
+    const r5 = expensesSheet.getCell("A5");
+    r5.value = `Trip: ${activeTripEmoji ? `${activeTripEmoji} ` : ""}${activeTripName}`;
+    r5.font = { size: 10.5, name: "Calibri", color: { argb: "FF374151" } };
+    expensesSheet.getRow(5).height = 16;
 
     // Row 6: Frozen Column Headers
     const headerRow = expensesSheet.getRow(6);
@@ -343,7 +393,9 @@ export async function GET(req: NextRequest) {
 
     // Row 2: Period line
     const sumPeriodCell = summarySheet.getCell("A2");
-    sumPeriodCell.value = `Period: ${startLabel} – ${endLabel}`;
+    sumPeriodCell.value = isGeneralTrip
+      ? `Period: ${startLabel} – ${endLabel}`
+      : `Period: ${startLabel} – ${endLabel}  •  Trip: ${activeTripName}`;
     sumPeriodCell.font = { size: 10.5, name: "Calibri", color: { argb: "FF374151" } };
 
     // Row 3: Blank spacer
@@ -374,7 +426,7 @@ export async function GET(req: NextRequest) {
     let grandTagSum = 0;
 
     for (const exp of expensesData) {
-      for (const tag of exp.tags) {
+      for (const tag of exp.groupTags) {
         const existing = tagAggregation.get(tag) || { total: 0, count: 0 };
         existing.total += exp.amount;
         existing.count += 1;
@@ -489,7 +541,8 @@ export async function GET(req: NextRequest) {
     const buffer = await workbook.xlsx.writeBuffer();
 
     // File name format: budget-tracker-export-{startDate}-to-{endDate}.xlsx
-    const fileName = `budget-tracker-export-${startFileStr}-to-${endFileStr}.xlsx`;
+    const tripSlug = !isGeneralTrip ? `-${slugify(activeTripName)}` : "";
+    const fileName = `budget-tracker-export${tripSlug}-${startFileStr}-to-${endFileStr}.xlsx`;
 
     return new NextResponse(buffer, {
       headers: {

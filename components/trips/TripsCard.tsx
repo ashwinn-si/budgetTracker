@@ -162,6 +162,11 @@ export function TripsCard() {
                   Current
                 </span>
               )}
+              {trip.isSharingEnabled && (
+                <span className="text-[9.5px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 shrink-0">
+                  Shared
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-muted)] mt-1 flex-wrap">
               <span>
