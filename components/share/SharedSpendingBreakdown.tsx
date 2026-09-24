@@ -24,8 +24,6 @@ import {
 } from "date-fns";
 import {
   BarChart3,
-  Table as TableIcon,
-  LayoutGrid,
   Calendar,
   Flame,
   Coins,
@@ -53,7 +51,6 @@ export interface SharedSpendingBreakdownProps {
 }
 
 type PeriodType = "day" | "week" | "month";
-type ViewMode = "chart" | "table" | "both";
 
 interface BreakdownItem {
   id: string;
@@ -79,7 +76,6 @@ export function SharedSpendingBreakdown({
   className,
 }: SharedSpendingBreakdownProps) {
   const [period, setPeriod] = useState<PeriodType>("day");
-  const [viewMode, setViewMode] = useState<ViewMode>("both");
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
@@ -337,9 +333,8 @@ export function SharedSpendingBreakdown({
           </div>
         </div>
 
-        {/* Controls: Period Switcher & View Switcher */}
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Period Tabs */}
+        {/* Controls: Period Switcher (Day / Week / Month) */}
+        <div className="flex items-center">
           <div className="flex items-center p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
             <button
               type="button"
@@ -373,52 +368,6 @@ export function SharedSpendingBreakdown({
               }`}
             >
               Month
-            </button>
-          </div>
-
-          {/* View Mode Switcher */}
-          <div className="flex items-center p-1 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
-            <button
-              type="button"
-              onClick={() => setViewMode("chart")}
-              title="Graph View"
-              aria-label="Graph View"
-              className={`p-1.5 px-2.5 rounded-xl text-xs flex items-center gap-1 font-medium transition-all cursor-pointer ${
-                viewMode === "chart"
-                  ? "bg-emerald-500 text-white shadow-sm shadow-emerald-500/20 font-semibold"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              }`}
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Chart</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              title="Table View"
-              aria-label="Table View"
-              className={`p-1.5 px-2.5 rounded-xl text-xs flex items-center gap-1 font-medium transition-all cursor-pointer ${
-                viewMode === "table"
-                  ? "bg-emerald-500 text-white shadow-sm shadow-emerald-500/20 font-semibold"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              }`}
-            >
-              <TableIcon className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Table</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("both")}
-              title="Split View (Chart & Table)"
-              aria-label="Split View"
-              className={`p-1.5 px-2.5 rounded-xl text-xs flex items-center gap-1 font-medium transition-all cursor-pointer ${
-                viewMode === "both"
-                  ? "bg-emerald-500 text-white shadow-sm shadow-emerald-500/20 font-semibold"
-                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              }`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">Both</span>
             </button>
           </div>
         </div>
@@ -475,20 +424,18 @@ export function SharedSpendingBreakdown({
         </div>
       </div>
 
-      {/* ── Visual Bar Chart ── */}
-      {(viewMode === "chart" || viewMode === "both") && isMounted && (
-        <div className="space-y-2">
-          {viewMode === "both" && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Activity Graph
-              </span>
-              <span className="text-[11px] text-[var(--text-muted)]">
-                {activeSeries.length} points
-              </span>
-            </div>
-          )}
-          <div className="w-full h-[240px] pt-2">
+      {/* ── Desktop: Visual Bar Chart Only ── */}
+      {isMounted && (
+        <div className="hidden sm:block space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              Activity Graph
+            </span>
+            <span className="text-[11px] text-[var(--text-muted)]">
+              {activeSeries.length} points
+            </span>
+          </div>
+          <div className="w-full h-[260px] pt-2">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={activeSeries}
@@ -550,7 +497,7 @@ export function SharedSpendingBreakdown({
                   dataKey="amount"
                   fill="#22C55E"
                   radius={[5, 5, 0, 0]}
-                  maxBarSize={32}
+                  maxBarSize={36}
                   className="transition-all duration-300 hover:opacity-80"
                 />
               </BarChart>
@@ -559,106 +506,98 @@ export function SharedSpendingBreakdown({
         </div>
       )}
 
-      {/* ── Detailed Table View ── */}
-      {(viewMode === "table" || viewMode === "both") && (
-        <div className="space-y-2">
-          {viewMode === "both" && (
-            <div className="flex items-center justify-between pt-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Breakdown Table
-              </span>
-              <span className="text-[11px] text-[var(--text-muted)]">
-                {tableRows.length} active period{tableRows.length === 1 ? "" : "s"}
-              </span>
+      {/* ── Mobile: Scrollable Breakdown Table Only ── */}
+      <div className="sm:hidden space-y-2">
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+            Breakdown Table
+          </span>
+          <span className="text-[11px] text-[var(--text-muted)]">
+            {tableRows.length} active period{tableRows.length === 1 ? "" : "s"}
+          </span>
+        </div>
+
+        {tableRows.length === 0 ? (
+          <div className="py-8 text-center text-xs text-[var(--text-muted)]">
+            No expenses recorded for this period.
+          </div>
+        ) : (
+          <div className="rounded-2xl overflow-hidden border border-black/[0.06] dark:border-white/[0.08] shadow-sm">
+            {/* Header */}
+            <div className="grid grid-cols-12 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] border-b border-black/[0.05] dark:border-white/[0.05] text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              <span className="col-span-5">Period</span>
+              <span className="col-span-3 text-center">Entries</span>
+              <span className="col-span-4 text-right">Amount</span>
             </div>
-          )}
 
-          {tableRows.length === 0 ? (
-            <div className="py-8 text-center text-xs text-[var(--text-muted)]">
-              No expenses recorded for this period.
-            </div>
-          ) : (
-            <div className="rounded-2xl overflow-hidden border border-black/[0.06] dark:border-white/[0.08] shadow-sm">
-              {/* Header */}
-              <div className="grid grid-cols-12 px-4 py-2.5 bg-black/[0.03] dark:bg-white/[0.03] border-b border-black/[0.05] dark:border-white/[0.05] text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                <span className="col-span-5 sm:col-span-5">Period</span>
-                <span className="col-span-3 sm:col-span-2 text-center">Entries</span>
-                <span className="hidden sm:inline sm:col-span-2 text-center">Share</span>
-                <span className="col-span-4 sm:col-span-3 text-right">Amount</span>
-              </div>
+            {/* Scrollable Rows */}
+            <div
+              tabIndex={0}
+              role="region"
+              aria-label="Scrollable Breakdown Table Rows"
+              className="divide-y divide-black/[0.04] dark:divide-white/[0.04] max-h-[300px] overflow-y-auto overscroll-contain custom-scrollbar touch-pan-y"
+            >
+              {tableRows.map((item, idx) => {
+                const pct = maxAmount > 0 ? (item.amount / maxAmount) * 100 : 0;
+                return (
+                  <div
+                    key={item.id}
+                    className={`relative grid grid-cols-12 items-center px-4 py-3 overflow-hidden transition-colors ${
+                      idx % 2 === 0 ? "bg-white/40 dark:bg-white/[0.01]" : "bg-transparent"
+                    }`}
+                  >
+                    {/* Proportional background bar */}
+                    <span
+                      className="absolute inset-y-0 left-0 bg-emerald-500/[0.08] dark:bg-emerald-500/[0.12] rounded-r-full pointer-events-none transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
 
-              {/* Rows */}
-              <div className="divide-y divide-black/[0.04] dark:divide-white/[0.04] max-h-[260px] overflow-y-auto custom-scrollbar">
-                {tableRows.map((item, idx) => {
-                  const pct = maxAmount > 0 ? (item.amount / maxAmount) * 100 : 0;
-                  return (
-                    <div
-                      key={item.id}
-                      className={`relative grid grid-cols-12 items-center px-4 py-3 overflow-hidden transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02] ${
-                        idx % 2 === 0 ? "bg-white/40 dark:bg-white/[0.01]" : "bg-transparent"
-                      }`}
-                    >
-                      {/* Proportional background bar */}
-                      <span
-                        className="absolute inset-y-0 left-0 bg-emerald-500/[0.08] dark:bg-emerald-500/[0.12] rounded-r-full pointer-events-none transition-all duration-500"
-                        style={{ width: `${pct}%` }}
-                      />
-
-                      {/* Period Label */}
-                      <div className="relative col-span-5 sm:col-span-5 min-w-0 pr-2">
-                        <div className="text-xs font-semibold text-[var(--text-primary)] truncate">
-                          {item.label}
-                        </div>
-                        <div className="text-[10px] text-[var(--text-muted)] truncate">
-                          {item.subLabel}
-                        </div>
+                    {/* Period Label */}
+                    <div className="relative col-span-5 min-w-0 pr-2">
+                      <div className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                        {item.label}
                       </div>
-
-                      {/* Entries Count */}
-                      <div className="relative col-span-3 sm:col-span-2 text-center">
-                        <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-[var(--text-secondary)]">
-                          {item.count} {item.count === 1 ? "entry" : "entries"}
-                        </span>
-                      </div>
-
-                      {/* Share % */}
-                      <div className="relative hidden sm:block sm:col-span-2 text-center text-xs font-medium text-[var(--text-muted)]">
-                        {item.percentage.toFixed(1)}%
-                      </div>
-
-                      {/* Amount */}
-                      <div className="relative col-span-4 sm:col-span-3 text-right">
-                        <span className="text-xs font-serif-display font-semibold text-emerald-700 dark:text-emerald-400">
-                          {formatAmount(item.amount)}
-                        </span>
-                        <div className="sm:hidden text-[9px] text-[var(--text-muted)]">
-                          {item.percentage.toFixed(1)}%
-                        </div>
+                      <div className="text-[10px] text-[var(--text-muted)] truncate">
+                        {item.subLabel}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
 
-              {/* Footer Summary */}
-              <div className="grid grid-cols-12 items-center px-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] border-t border-black/[0.06] dark:border-white/[0.06]">
-                <div className="col-span-5 sm:col-span-5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                  Total ({stats.activeCount} active {stats.periodLabel})
-                </div>
-                <div className="col-span-3 sm:col-span-2 text-center text-[10px] font-semibold text-[var(--text-muted)]">
-                  {expenses.length} entries
-                </div>
-                <div className="hidden sm:block sm:col-span-2 text-center text-[10px] font-semibold text-[var(--text-muted)]">
-                  100%
-                </div>
-                <div className="col-span-4 sm:col-span-3 text-right text-xs font-bold font-serif-display text-[var(--text-primary)]">
-                  {formatAmount(totalSpend)}
-                </div>
+                    {/* Entries Count */}
+                    <div className="relative col-span-3 text-center">
+                      <span className="inline-block text-[11px] font-medium px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-[var(--text-secondary)]">
+                        {item.count} {item.count === 1 ? "entry" : "entries"}
+                      </span>
+                    </div>
+
+                    {/* Amount */}
+                    <div className="relative col-span-4 text-right">
+                      <span className="text-xs font-serif-display font-semibold text-emerald-700 dark:text-emerald-400">
+                        {formatAmount(item.amount)}
+                      </span>
+                      <div className="text-[9px] text-[var(--text-muted)]">
+                        {item.percentage.toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer Summary */}
+            <div className="grid grid-cols-12 items-center px-4 py-3 bg-black/[0.03] dark:bg-white/[0.03] border-t border-black/[0.06] dark:border-white/[0.06]">
+              <div className="col-span-5 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                Total ({stats.activeCount} active {stats.periodLabel})
+              </div>
+              <div className="col-span-3 text-center text-[10px] font-semibold text-[var(--text-muted)]">
+                {expenses.length} entries
+              </div>
+              <div className="col-span-4 text-right text-xs font-bold font-serif-display text-[var(--text-primary)]">
+                {formatAmount(totalSpend)}
               </div>
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </GlassCard>
   );
 }
