@@ -32,6 +32,23 @@ import { ConfirmModal } from "@/components/ui/ConfirmModal";
 import { TripSourceBadge } from "@/components/trips/TripSourceBadge";
 import { MirroredExpenseModal } from "@/components/trips/MirroredExpenseModal";
 
+function getAddedTimestamp(exp: LocalExpense): number {
+  if (exp.createdAt) {
+    const t = new Date(exp.createdAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (exp.clientId?.startsWith("exp_")) {
+    const parts = exp.clientId.split("_");
+    const ts = parseInt(parts[1], 10);
+    if (!isNaN(ts) && ts > 0) return ts;
+  }
+  if (exp.date) {
+    const t = new Date(exp.date).getTime();
+    if (!isNaN(t)) return t;
+  }
+  return 0;
+}
+
 export default function ExpensesPage() {
   const { formatAmount, currencyInfo } = useCurrency();
   const { trips, activeTripId } = useTrip();
@@ -166,7 +183,16 @@ export default function ExpensesPage() {
 
         return matchesSearch && matchesTag && matchesMonth;
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => {
+        const timeA = getAddedTimestamp(a);
+        const timeB = getAddedTimestamp(b);
+        if (timeB !== timeA) {
+          return timeB - timeA;
+        }
+        const dateDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (dateDiff !== 0) return dateDiff;
+        return (b.clientId || "").localeCompare(a.clientId || "");
+      });
   }, [allExpenses, searchTerm, selectedTag, selectedMonth]);
 
   const handleDelete = (clientId: string) => {
@@ -282,7 +308,7 @@ export default function ExpensesPage() {
           </Button>
         </GlassCard>
       ) : (
-        <div className="overflow-y-auto max-h-[calc(100vh-280px)] pr-2 -mr-2 custom-scrollbar">
+        <div className="overflow-y-auto max-h-[calc(100dvh-280px)] pr-2 -mr-2 custom-scrollbar">
           <div className="space-y-3 pb-4">
             {filteredAndSortedExpenses.map((expense) => {
             const dateFormatted = new Date(expense.date).toLocaleDateString(undefined, {

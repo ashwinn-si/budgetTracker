@@ -391,7 +391,7 @@ export default function TagsPage() {
           </button>
         </div>
       ) : (
-        <div className="overflow-y-auto max-h-[calc(100vh-280px)] pr-2 -mr-2 custom-scrollbar">
+        <div className="overflow-y-auto max-h-[calc(100dvh-280px)] pr-2 -mr-2 custom-scrollbar">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pb-4">
             {allTags.map((tag) => {
             const count = tagStats.counts[tag._id] || 0;

@@ -296,7 +296,7 @@ export default function SavingsPage() {
       </GlassCard>
 
       {/* Savings Logs / Transactions List */}
-      <div className="overflow-y-auto max-h-[calc(100vh-380px)] pr-2 -mr-2 custom-scrollbar">
+      <div className="overflow-y-auto max-h-[calc(100dvh-380px)] pr-2 -mr-2 custom-scrollbar">
         <div className="space-y-3 pb-4">
           {filteredLogs.length === 0 ? (
             <GlassCard variant="light" className="p-8 sm:p-12 text-center space-y-4">

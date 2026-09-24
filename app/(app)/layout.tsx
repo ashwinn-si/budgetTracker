@@ -31,8 +31,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      {/* Outer shell: fixed to 100vh — background never scrolls */}
-      <div className="h-screen overflow-hidden flex w-full">
+      {/* Outer shell: fixed to the dynamic viewport (dvh) so iOS toolbars never hide the bottom of the page */}
+      <div className="h-dvh overflow-hidden flex w-full">
         {/* Desktop Sidebar */}
         <Sidebar />
 
@@ -43,7 +43,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
           {/* Page Content — only this scrolls */}
           <main className="flex-1 overflow-y-auto w-full">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-[calc(7rem+env(safe-area-inset-bottom,0px))] lg:pb-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6 pb-[calc(7rem_+_env(safe-area-inset-bottom,0px))] lg:pb-8">
               {children}
             </div>
           </main>
