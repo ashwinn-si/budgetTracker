@@ -323,7 +323,7 @@ export default function TagsPage() {
               }}
               placeholder="e.g., Subscriptions, Pet Care, Travel..."
               autoFocus
-              className="w-full min-w-0 px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
+              className="w-full min-w-0 max-w-full px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-base sm:text-sm text-[var(--text-primary)] transition-all shadow-xs"
             />
             {error && <p className="text-xs text-rose-500 mt-1.5">{error}</p>}
           </div>
@@ -541,7 +541,7 @@ export default function TagsPage() {
               }}
               placeholder="e.g., Subscriptions, Pet Care, Travel..."
               autoFocus
-              className="w-full min-w-0 px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
+              className="w-full min-w-0 max-w-full px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-base sm:text-sm text-[var(--text-primary)] transition-all shadow-xs"
             />
             {editError && <p className="text-xs text-rose-500 mt-1.5">{editError}</p>}
           </div>

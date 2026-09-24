@@ -231,7 +231,7 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
             placeholder="e.g., Japan 2026, Goa Weekend..."
             maxLength={40}
             autoFocus
-            className="w-full min-w-0 px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
+            className="w-full min-w-0 max-w-full px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-base sm:text-sm text-[var(--text-primary)] transition-all shadow-xs"
           />
           {error && <p className="text-xs text-rose-500 mt-1.5">{error}</p>}
         </div>
@@ -248,7 +248,7 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
               if (countGraphemes(val) <= 2) setEmoji(val);
             }}
             placeholder="✈️"
-            className="w-20 px-3 py-2.5 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-lg text-center text-[var(--text-primary)] transition-all shadow-xs mb-2.5"
+            className="w-20 max-w-full px-3 py-2.5 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-lg text-center text-[var(--text-primary)] transition-all shadow-xs mb-2.5"
           />
           <div className="flex flex-wrap gap-2">
             {QUICK_EMOJIS.map((qe) => (

@@ -193,6 +193,11 @@ BudgetFlow provides a bidirectional sync and management lifecycle with Google Dr
   - Fixed bottom glass navigation bar with thumb-friendly buttons for Dashboard, Expenses, Savings, and Profile.
   - Floating action button (FAB) or dedicated bottom-sheet forms for rapid expense entry.
   - Dialogs render as bottom-sliding drawer sheets.
+  - **iOS Input Ergonomics & Auto-Zoom Prevention**:
+    - Any input with font-size < 16px triggers iOS WebKit automatic viewport zoom, blowing out the page width and causing horizontal scroll.
+    - All inputs/textareas/selects must specify at least 16px on mobile viewports (`text-base sm:text-sm` or via the global mobile font-size rule in `globals.css`).
+    - WebKit native date controls must be normalized with `appearance: none; -webkit-appearance: none; min-width: 0; max-width: 100%;` to stop native pseudo-elements from forcing minimum widths.
+    - Large hero currency inputs must be enclosed in `min-w-0 max-w-full overflow-hidden` flex rows.
 - **Desktop (≥ 768px)**:
   - Collapsible left glass sidebar with expanded analytics navigation and shortcut keys.
   - Centered spring modals with full keyboard accessibility (`Esc` to dismiss, `Enter` to submit).

@@ -393,7 +393,7 @@ export function ExpenseFormModal({
             <DollarSign className="w-3.5 h-3.5 shrink-0" />
             <span>Amount</span>
           </label>
-          <div className="flex items-center min-w-0">
+          <div className="flex items-center min-w-0 max-w-full overflow-hidden">
             <span className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-emerald-600 dark:text-emerald-400 mr-2 select-none shrink-0">
               {currencyInfo.symbol}
             </span>
@@ -407,14 +407,14 @@ export function ExpenseFormModal({
               onKeyDown={handleAmountKeyDown}
               required
               autoFocus
-              className="w-full min-w-0 text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
+              className="w-full min-w-0 max-w-full text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
             />
           </div>
         </div>
 
         {/* Date and Note Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 min-w-0">
-          <div className="space-y-1.5 min-w-0">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 min-w-0 max-w-full">
+          <div className="space-y-1.5 min-w-0 max-w-full">
             <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Date</span>
@@ -424,11 +424,11 @@ export function ExpenseFormModal({
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
-              className="w-full min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm font-medium bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 shadow-xs transition-all"
+              className="w-full min-w-0 max-w-full appearance-none px-3.5 sm:px-4 py-2.5 sm:py-3 text-base sm:text-sm font-medium bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 shadow-xs transition-all"
             />
           </div>
 
-          <div className="space-y-1.5 min-w-0">
+          <div className="space-y-1.5 min-w-0 max-w-full">
             <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
               <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Note / Description</span>
@@ -438,14 +438,14 @@ export function ExpenseFormModal({
               placeholder="e.g. Weekly grocery haul"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 placeholder:text-[var(--text-muted)]/50 shadow-xs transition-all"
+              className="w-full min-w-0 max-w-full px-3.5 sm:px-4 py-2.5 sm:py-3 text-base sm:text-sm bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 placeholder:text-[var(--text-muted)]/50 shadow-xs transition-all"
             />
           </div>
         </div>
 
         {/* Categories / Tags Section */}
-        <div className="space-y-2.5 min-w-0">
-          <div className="flex items-center justify-between min-w-0">
+        <div className="space-y-2.5 min-w-0 max-w-full">
+          <div className="flex items-center justify-between min-w-0 max-w-full">
             <div className="flex items-center gap-2 min-w-0">
               <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
                 <TagIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -470,7 +470,7 @@ export function ExpenseFormModal({
           </div>
 
           {/* Quick Tag Search / Create Combobox Bar */}
-          <div className="relative min-w-0">
+          <div className="relative min-w-0 max-w-full">
             <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -485,7 +485,7 @@ export function ExpenseFormModal({
                   }
                 }
               }}
-              className="w-full min-w-0 pl-9 pr-8 py-2 text-xs rounded-xl bg-white/70 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/60 outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all shadow-xs"
+              className="w-full min-w-0 max-w-full pl-9 pr-8 py-2 text-base sm:text-xs rounded-xl bg-white/70 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/60 outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all shadow-xs"
             />
             {tagSearchQuery && (
               <button
