@@ -26,5 +26,8 @@ A personal budget tracking web app built with Next.js (App Router), MongoDB, and
 - All offline database interactions MUST use Dexie, not `localStorage`.
 - All writes land in IndexedDB first, with `syncStatus: "pending"`, and sync in the background.
 - Respect Next.js App Router conventions (server vs client components).
+- **Expense Ordering**: Expenses must always be presented in descending order of addition (recent first), prioritizing `addedTimestamp` / creation time over older calendar transaction dates.
+- **Mobile Responsive Layout**: Enforce `min-w-0`, `max-w-full`, and `overflow-x-hidden` across all modals and sliding sheets to strictly prevent horizontal overflow on mobile screens. Use `100dvh` for full mobile viewport heights.
+- **Shared Dashboard Architecture**: Public share pages live in `app/share/[shareId]/page.tsx` and must stay modular by consuming components from `components/share/` (`SharedSpendingBreakdown`, `SharedExpensesList`, `SharedCategoryBreakdown`, `SharedMetricCards`, `TripSwitcher`, etc.).
 - Google Sheets sync must always update the user's existing spreadsheet in-place (`sheetsSpreadsheetId`) to prevent duplicate sheets, unless a fresh sync (`action: "fresh"`) is explicitly requested. Token auto-refresh events must be persisted to the database.
 - Refer to `implementation.md` for detailed step-by-step feature implementations and data model definitions.

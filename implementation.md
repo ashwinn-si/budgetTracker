@@ -22,6 +22,9 @@ A personal budget tracking web app built with Next.js, MongoDB, and Vercel. Mobi
 | 10 | Excel export | |
 | 11 | Google Sheets sync | One-way export to the user's own Sheet |
 | 12 | Global loading state via React Context | |
+| 13 | Trips & Trip Sharing Mode | Dedicated trip budgets, mirrored expenses, and combined share views |
+| 14 | Public Dashboard & Spending Breakdown | Read-only shared links with Day/Week/Month bar chart & data table, category progress, and paginated expense list |
+| 15 | Smart Expense Sorting & Dynamic Totals | Recent-first addition sorting, dynamic header total responding to active filters |
 
 ---
 
@@ -317,3 +320,20 @@ This page now does more than account info:
 3. Set `secure: true` and the correct `sameSite` on the refresh-token cookie for the deployed domain — cookie behavior differs between `localhost` and a real Vercel domain.
 4. Anything touching IndexedDB or Dexie must live in a `"use client"` component, guarded from running during SSR.
 5. Update the Google OAuth authorized redirect URI in Google Cloud Console to include the production `NEXTAUTH_URL`.
+
+### Phase 11 — Public & Trip Dashboard Sharing & Analytics
+1. **Public Sharing Route (`app/share/[shareId]/page.tsx`)**:
+   - Generates read-only shareable links supporting either monthly views or whole-trip modes.
+   - Modular architecture composed of components from `components/share/`:
+     - `SharedSpendingBreakdown`: Day, Week, and Month breakdown with interactive Recharts bar chart, detailed table, micro-metric chips (Total Spend, Active Periods, Average Spend, Peak Spend).
+     - `SharedExpensesList`: Paginated expense receipts (10 items/page) inside a bounded scroll container (`max-h-[520px] custom-scrollbar`) with sticky date headers in trip mode.
+     - `SharedCategoryBreakdown`: Category distribution with progress bars, tag initials, and month navigation.
+     - `SharedMetricCards`: Total spend and savings balance indicators.
+     - `TripSwitcher`: Switcher for combined trip shares with mobile bottom-sheet and desktop popover.
+     - `ExpenseRow` & `FromTripPill`: Itemized transaction rows with mirrored trip indications.
+2. **Smart Expense Management**:
+   - Expenses ordered by recency of addition (`addedTimestamp`), ensuring newly logged entries always appear at the top.
+   - Dynamic total badge in the Expenses page header computing the live sum of filtered items.
+3. **Mobile & Viewport Optimization**:
+   - Strict zero horizontal overflow across all modals and sliding sheets (`min-w-0`, `max-w-full`, text truncation).
+   - Use dynamic viewport units (`100dvh`) to avoid mobile browser navigation bar layout jumps.

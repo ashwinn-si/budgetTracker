@@ -86,8 +86,19 @@ BudgetFlow enforces strict UI component consistency:
 - Modals utilize `motion/react` spring physics:
   - Damping: `30`
   - Stiffness: `320`
+- **Mobile Overflow Prevention**: Every modal dialog and sheet strictly enforces `min-w-0`, `max-w-full`, and `overflow-x-hidden`. Inner text containers utilize `.truncate` to prevent horizontal blowouts on compact mobile screens. Viewport heights strictly employ `100dvh` to absorb mobile browser address bar transitions.
 
-### 3.4 Notifications & Feedback
+### 3.4 Shared Dashboard Components & Analytics
+- **Spending Breakdown (`SharedSpendingBreakdown`)**:
+  - Period tabs: `[Day | Week | Month]` pill switcher.
+  - View switcher: `[Graph | Table | Both]` allowing viewers to inspect Recharts bar charts and/or detailed tables.
+  - Micro-metric stat cards displaying Total Spend, Active Periods, Average Spend, and Peak Spend.
+- **Paginated Receipts (`SharedExpensesList`)**:
+  - 10-item pagination with active emerald pill indicators and ellipsis for large ranges.
+  - Bounded scroll container (`max-h-[440px] sm:max-h-[520px] custom-scrollbar`) with sticky date headers in trip mode.
+  - Auto-reset to page 1 on filter or trip change, with smooth scroll to top on page switches.
+
+### 3.5 Notifications & Feedback
 - Native browser `alert()` and `confirm()` are strictly forbidden.
 - Global toast notifications handled via `react-hot-toast` with emerald-accented glass aesthetics.
 - Copy actions feature immediate inline icon feedback (`CheckCircle2` with "Copied!" state) alongside toast notifications.
