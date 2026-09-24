@@ -181,15 +181,15 @@ export function SavingsDepositModal({
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 min-w-0 max-w-full">
         {/* Hero Amount Card */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-teal-500/[0.04] dark:bg-teal-500/[0.08] border border-teal-500/30 dark:border-teal-500/20 shadow-xs focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/15 transition-all">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-teal-500/[0.04] dark:bg-teal-500/[0.08] border border-teal-500/30 dark:border-teal-500/20 shadow-xs focus-within:border-teal-500 focus-within:ring-4 focus-within:ring-teal-500/15 transition-all min-w-0">
           <label className="block text-xs font-semibold uppercase tracking-wider text-teal-700 dark:text-teal-400 mb-2 flex items-center gap-1.5">
-            <PiggyBank className="w-3.5 h-3.5" />
+            <PiggyBank className="w-3.5 h-3.5 shrink-0" />
             <span>Deposit Amount</span>
           </label>
-          <div className="flex items-center">
-            <span className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-teal-600 dark:text-teal-400 mr-2 select-none">
+          <div className="flex items-center min-w-0">
+            <span className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-teal-600 dark:text-teal-400 mr-2 select-none shrink-0">
               {currencyInfo.symbol}
             </span>
             <input
@@ -202,16 +202,16 @@ export function SavingsDepositModal({
               onKeyDown={handleAmountKeyDown}
               required
               autoFocus
-              className="w-full text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
+              className="w-full min-w-0 text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
             />
           </div>
         </div>
 
         {/* Date and Description */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <div className="space-y-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 min-w-0">
+          <div className="space-y-1.5 min-w-0">
             <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <Calendar className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
               <span>Date</span>
             </label>
             <input
@@ -219,13 +219,13 @@ export function SavingsDepositModal({
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
-              className="w-full px-4 py-3 text-sm font-medium bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white dark:focus:bg-black/40 shadow-xs transition-all"
+              className="w-full min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm font-medium bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white dark:focus:bg-black/40 shadow-xs transition-all"
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+              <FileText className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 shrink-0" />
               <span>Purpose / Note</span>
             </label>
             <input
@@ -233,7 +233,7 @@ export function SavingsDepositModal({
               placeholder="e.g. Monthly salary allocation"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full px-4 py-3 text-sm bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white dark:focus:bg-black/40 placeholder:text-[var(--text-muted)]/50 shadow-xs transition-all"
+              className="w-full min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-teal-500/20 focus:border-teal-500 focus:bg-white dark:focus:bg-black/40 placeholder:text-[var(--text-muted)]/50 shadow-xs transition-all"
             />
           </div>
         </div>

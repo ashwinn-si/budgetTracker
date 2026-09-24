@@ -97,7 +97,7 @@ export function TripSwitcher({ variant, className = "" }: TripSwitcherProps) {
   );
 
   const listContent = (
-      <div className={isDropdown ? "max-h-[50vh] overflow-y-auto custom-scrollbar space-y-1" : "max-h-[50vh] overflow-y-auto custom-scrollbar -mx-2 px-2 space-y-1"}>
+      <div className="max-h-[50vh] overflow-y-auto overflow-x-hidden custom-scrollbar space-y-1 min-w-0 max-w-full">
         {variant === "mobile" ? (
           <>
             {isViewingCompleted && (

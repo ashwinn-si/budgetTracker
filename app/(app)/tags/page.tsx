@@ -308,9 +308,9 @@ export default function TagsPage() {
             e.preventDefault();
             handleCreateTag();
           }}
-          className="space-y-4"
+          className="space-y-4 min-w-0 max-w-full"
         >
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
               Category Name
             </label>
@@ -323,12 +323,12 @@ export default function TagsPage() {
               }}
               placeholder="e.g., Subscriptions, Pet Care, Travel..."
               autoFocus
-              className="w-full px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
+              className="w-full min-w-0 px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
             />
             {error && <p className="text-xs text-rose-500 mt-1.5">{error}</p>}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
               Pick Accent Color
             </label>
@@ -339,7 +339,7 @@ export default function TagsPage() {
                   type="button"
                   onClick={() => setSelectedColor(color)}
                   style={{ backgroundColor: color }}
-                  className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
+                  className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center shrink-0 ${
                     selectedColor === color
                       ? "ring-3 ring-offset-2 ring-emerald-500 scale-110 shadow-md"
                       : "opacity-80 hover:opacity-100 hover:scale-105"
@@ -350,12 +350,12 @@ export default function TagsPage() {
           </div>
 
           {/* Live Preview */}
-          <div className="pt-2 flex items-center gap-2">
-            <span className="text-xs text-[var(--text-muted)] font-medium">
+          <div className="pt-2 flex items-center gap-2 min-w-0">
+            <span className="text-xs text-[var(--text-muted)] font-medium shrink-0">
               Preview Badge:
             </span>
             <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-xs max-w-full truncate min-w-0"
               style={{
                 backgroundColor: `${selectedColor}20`,
                 color: selectedColor,
@@ -363,10 +363,10 @@ export default function TagsPage() {
               }}
             >
               <span
-                className="w-2 h-2 rounded-full"
+                className="w-2 h-2 rounded-full shrink-0"
                 style={{ backgroundColor: selectedColor }}
               />
-              {newTagName.trim() || "Category Name"}
+              <span className="truncate">{newTagName.trim() || "Category Name"}</span>
             </span>
           </div>
         </form>
@@ -526,9 +526,9 @@ export default function TagsPage() {
             e.preventDefault();
             handleUpdateTag();
           }}
-          className="space-y-4"
+          className="space-y-4 min-w-0 max-w-full"
         >
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-1.5">
               Category Name
             </label>
@@ -541,12 +541,12 @@ export default function TagsPage() {
               }}
               placeholder="e.g., Subscriptions, Pet Care, Travel..."
               autoFocus
-              className="w-full px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
+              className="w-full min-w-0 px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
             />
             {editError && <p className="text-xs text-rose-500 mt-1.5">{editError}</p>}
           </div>
 
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
               Pick Accent Color
             </label>
@@ -557,7 +557,7 @@ export default function TagsPage() {
                   type="button"
                   onClick={() => setEditSelectedColor(color)}
                   style={{ backgroundColor: color }}
-                  className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
+                  className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center shrink-0 ${
                     editSelectedColor === color
                       ? "ring-3 ring-offset-2 ring-emerald-500 scale-110 shadow-md"
                       : "opacity-80 hover:opacity-100 hover:scale-105"
@@ -568,12 +568,12 @@ export default function TagsPage() {
           </div>
 
           {/* Live Preview */}
-          <div className="pt-2 flex items-center gap-2">
-            <span className="text-xs text-[var(--text-muted)] font-medium">
+          <div className="pt-2 flex items-center gap-2 min-w-0">
+            <span className="text-xs text-[var(--text-muted)] font-medium shrink-0">
               Preview Badge:
             </span>
             <span
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-xs"
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-xs max-w-full truncate min-w-0"
               style={{
                 backgroundColor: `${editSelectedColor}20`,
                 color: editSelectedColor,
@@ -581,10 +581,10 @@ export default function TagsPage() {
               }}
             >
               <span
-                className="w-2 h-2 rounded-full"
+                className="w-2 h-2 rounded-full shrink-0"
                 style={{ backgroundColor: editSelectedColor }}
               />
-              {editTagName.trim() || "Preview Category"}
+              <span className="truncate">{editTagName.trim() || "Preview Category"}</span>
             </span>
           </div>
         </form>

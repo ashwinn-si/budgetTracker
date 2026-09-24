@@ -216,8 +216,8 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
         </>
       }
     >
-      <form id="trip-form" onSubmit={handleSubmit} className="space-y-5">
-        <div>
+      <form id="trip-form" onSubmit={handleSubmit} className="space-y-5 min-w-0 max-w-full">
+        <div className="min-w-0">
           <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
             Trip name
           </label>
@@ -231,12 +231,12 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
             placeholder="e.g., Japan 2026, Goa Weekend..."
             maxLength={40}
             autoFocus
-            className="w-full px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
+            className="w-full min-w-0 px-4 py-3 rounded-2xl bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 focus:border-emerald-500 focus:ring-3 focus:ring-emerald-500/20 outline-none text-sm text-[var(--text-primary)] transition-all shadow-xs"
           />
           {error && <p className="text-xs text-rose-500 mt-1.5">{error}</p>}
         </div>
 
-        <div>
+        <div className="min-w-0">
           <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
             Emoji
           </label>
@@ -256,7 +256,7 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
                 key={qe}
                 type="button"
                 onClick={() => setEmoji(qe)}
-                className={`w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all cursor-pointer border ${
+                className={`w-9 h-9 rounded-xl flex items-center justify-center text-base transition-all cursor-pointer border shrink-0 ${
                   emoji === qe
                     ? "bg-emerald-500/15 border-emerald-500 scale-105 shadow-sm"
                     : "bg-white/40 dark:bg-black/30 border-black/5 dark:border-white/10 hover:bg-white/70 dark:hover:bg-white/5"
@@ -268,7 +268,7 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
           </div>
         </div>
 
-        <div>
+        <div className="min-w-0">
           <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
             Colour
           </label>
@@ -279,7 +279,7 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
                 type="button"
                 onClick={() => setColorKey(color)}
                 style={{ backgroundColor: color }}
-                className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center ${
+                className={`w-8 h-8 rounded-full transition-transform cursor-pointer flex items-center justify-center shrink-0 ${
                   colorKey === color
                     ? "ring-3 ring-offset-2 ring-emerald-500 scale-110 shadow-md"
                     : "opacity-80 hover:opacity-100 hover:scale-105"
@@ -290,15 +290,15 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
         </div>
 
         {!isEdit && (
-          <div>
+          <div className="min-w-0">
             <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
               Copy categories from
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 min-w-0">
               <button
                 type="button"
                 onClick={() => setCopyTagsFromTripId(null)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border shrink-0 ${
                   copyTagsFromTripId === null
                     ? "bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-400 font-semibold"
                     : "bg-black/5 dark:bg-white/5 border-transparent text-[var(--text-secondary)] hover:bg-black/10 dark:hover:bg-white/10"
@@ -311,27 +311,27 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
                   key={t.tripId}
                   type="button"
                   onClick={() => setCopyTagsFromTripId(t.tripId)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer border max-w-full shrink-0 truncate ${
                     copyTagsFromTripId === t.tripId
                       ? "bg-emerald-500/15 border-emerald-500 text-emerald-700 dark:text-emerald-400 font-semibold"
                       : "bg-black/5 dark:bg-white/5 border-transparent text-[var(--text-secondary)] hover:bg-black/10 dark:hover:bg-white/10"
                   }`}
                 >
-                  {t.name} ({categoryCounts.get(t.tripId) || 0})
+                  <span className="truncate">{t.name} ({categoryCounts.get(t.tripId) || 0})</span>
                 </button>
               ))}
             </div>
           </div>
         )}
 
-        <div>
+        <div className="min-w-0">
           <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
             Also count expenses in
           </label>
-          <p className="text-xs text-[var(--text-muted)] mb-2.5 leading-relaxed">
+          <p className="text-xs text-[var(--text-muted)] mb-2.5 leading-relaxed break-words">
             Expenses added to this trip will also show up in the selected trips.
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 min-w-0">
             {mirrorCandidates.map((t) => {
               const selected = mirrorToTripIds.includes(t.tripId);
               const disabled = !canMirrorInto(trips, newTripId, t.tripId);
@@ -342,7 +342,7 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
                   disabled={disabled}
                   title={disabled ? "Already counts in this trip" : undefined}
                   onClick={() => toggleMirror(t.tripId)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all border ${
+                  className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all border max-w-full shrink-0 truncate ${
                     disabled
                       ? "opacity-40 cursor-not-allowed bg-black/5 dark:bg-white/5 border-transparent text-[var(--text-muted)]"
                       : selected
@@ -350,7 +350,7 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
                       : "bg-black/5 dark:bg-white/5 border-transparent text-[var(--text-secondary)] hover:bg-black/10 dark:hover:bg-white/10 cursor-pointer"
                   }`}
                 >
-                  {t.name}
+                  <span className="truncate">{t.name}</span>
                 </button>
               );
             })}
@@ -360,14 +360,14 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="relative">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+          <div className="relative min-w-0">
             <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
               Start date
             </label>
             {dateInputButton("Optional", startDate, () => setStartPickerOpen((v) => !v))}
             {startPickerOpen && (
-              <div className="absolute z-20 mt-2 p-3 bg-[var(--surface-overlay)] backdrop-blur-xl border border-[var(--border-subtle)] rounded-2xl shadow-2xl text-[var(--text-primary)]">
+              <div className="absolute z-20 mt-2 p-3 bg-[var(--surface-overlay)] backdrop-blur-xl border border-[var(--border-subtle)] rounded-2xl shadow-2xl text-[var(--text-primary)] max-w-[calc(100vw-2.5rem)] left-0 sm:left-auto overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                     Start date
@@ -405,13 +405,13 @@ export function TripFormModal({ isOpen, onClose, trip }: TripFormModalProps) {
             )}
           </div>
 
-          <div className="relative">
+          <div className="relative min-w-0">
             <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] mb-2">
               End date
             </label>
             {dateInputButton("Optional", endDate, () => setEndPickerOpen((v) => !v))}
             {endPickerOpen && (
-              <div className="absolute z-20 mt-2 p-3 bg-[var(--surface-overlay)] backdrop-blur-xl border border-[var(--border-subtle)] rounded-2xl shadow-2xl text-[var(--text-primary)]">
+              <div className="absolute z-20 mt-2 p-3 bg-[var(--surface-overlay)] backdrop-blur-xl border border-[var(--border-subtle)] rounded-2xl shadow-2xl text-[var(--text-primary)] max-w-[calc(100vw-2.5rem)] left-0 sm:left-auto right-auto sm:right-0 overflow-hidden">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                     End date

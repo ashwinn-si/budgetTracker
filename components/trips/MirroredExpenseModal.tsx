@@ -58,45 +58,45 @@ export function MirroredExpenseModal({ isOpen, onClose, expense, tagMap }: Mirro
       }
     >
       {expense && (
-        <div className="space-y-4">
-          <div className="p-4 rounded-2xl bg-white/60 dark:bg-black/25 border border-black/[0.06] dark:border-white/10 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+        <div className="space-y-4 min-w-0 max-w-full">
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-white/60 dark:bg-black/25 border border-black/[0.06] dark:border-white/10 space-y-3 min-w-0">
+            <div className="flex items-center justify-between min-w-0 gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] shrink-0">
                 Amount
               </span>
-              <span className="text-xl font-serif-display font-semibold text-[var(--text-primary)]">
+              <span className="text-xl font-serif-display font-semibold text-[var(--text-primary)] truncate">
                 {formatAmount(expense.amount)}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)]">
-              <Calendar className="w-3.5 h-3.5" />
-              <span>{dateFormatted}</span>
+            <div className="flex items-center gap-2 text-xs text-[var(--text-muted)] min-w-0">
+              <Calendar className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">{dateFormatted}</span>
             </div>
 
             {expense.note && (
-              <div className="flex items-start gap-2 text-xs text-[var(--text-secondary)]">
+              <div className="flex items-start gap-2 text-xs text-[var(--text-secondary)] min-w-0">
                 <FileText className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                <span>{expense.note}</span>
+                <span className="break-words min-w-0">{expense.note}</span>
               </div>
             )}
 
             {expense.tagIds && expense.tagIds.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex flex-wrap gap-1.5 pt-1 min-w-0">
                 {expense.tagIds.map((tId) => {
                   const tag = tagMap.get(tId);
                   if (!tag) return null;
                   return (
                     <span
                       key={tId}
-                      className="px-2 py-0.5 rounded-full text-[10px] font-medium border"
+                      className="px-2 py-0.5 rounded-full text-[10px] font-medium border max-w-full truncate"
                       style={{
                         backgroundColor: `${tag.colorKey}15`,
                         borderColor: `${tag.colorKey}30`,
                         color: tag.colorKey,
                       }}
                     >
-                      {tag.name}
+                      <span className="truncate max-w-[120px]">{tag.name}</span>
                     </span>
                   );
                 })}
@@ -104,7 +104,7 @@ export function MirroredExpenseModal({ isOpen, onClose, expense, tagMap }: Mirro
             )}
           </div>
 
-          <p className="text-xs text-[var(--text-muted)] leading-relaxed">
+          <p className="text-xs text-[var(--text-muted)] leading-relaxed break-words">
             This expense belongs to {sourceTripName}. It&apos;s counted here because {sourceTripName} is set to
             also count in {activeTrip.name}. To edit or delete it, switch to {sourceTripName}.
           </p>

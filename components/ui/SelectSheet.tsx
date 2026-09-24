@@ -40,7 +40,7 @@ export function SelectSheet({ value, onChange, options, placeholder, icon, title
       </button>
 
       <Modal isOpen={isOpen} onClose={() => setIsOpen(false)} title={title} maxWidth="sm">
-        <div className="max-h-[50vh] overflow-y-auto custom-scrollbar -mx-2 px-2 space-y-1">
+        <div className="max-h-[50vh] overflow-y-auto overflow-x-hidden custom-scrollbar space-y-1 min-w-0 max-w-full">
           {options.map((opt) => (
             <button
               key={opt.value}
@@ -49,14 +49,14 @@ export function SelectSheet({ value, onChange, options, placeholder, icon, title
                 onChange(opt.value);
                 setIsOpen(false);
               }}
-              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl text-left text-sm transition-colors ${
+              className={`w-full flex items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl text-left text-sm transition-colors min-w-0 gap-2 ${
                 value === opt.value
                   ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-semibold"
                   : "hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-primary)]"
               }`}
             >
-              <span>{opt.label}</span>
-              {value === opt.value && <Check className="w-4 h-4" />}
+              <span className="truncate">{opt.label}</span>
+              {value === opt.value && <Check className="w-4 h-4 shrink-0" />}
             </button>
           ))}
         </div>

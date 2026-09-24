@@ -376,11 +376,11 @@ export function ExpenseFormModal({
         </>
       }
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4 min-w-0 max-w-full">
         {isCrossTrip && (
-          <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300">
+          <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 min-w-0">
             <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-            <p className="text-xs leading-relaxed">
+            <p className="text-xs leading-relaxed break-words min-w-0">
               This expense belongs to {formTrip?.emoji ? `${formTrip.emoji} ` : ""}
               {formTrip?.name || "another trip"}. It will stay in that trip when saved.
             </p>
@@ -388,13 +388,13 @@ export function ExpenseFormModal({
         )}
 
         {/* Hero Amount Card */}
-        <div className="p-4 sm:p-5 rounded-2xl bg-white/80 dark:bg-black/25 border border-emerald-500/30 dark:border-emerald-500/20 shadow-xs focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/15 focus-within:bg-white dark:focus-within:bg-black/40 transition-all">
+        <div className="p-3.5 sm:p-5 rounded-2xl bg-white/80 dark:bg-black/25 border border-emerald-500/30 dark:border-emerald-500/20 shadow-xs focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/15 focus-within:bg-white dark:focus-within:bg-black/40 transition-all min-w-0">
           <label className="block text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 mb-2 flex items-center gap-1.5">
-            <DollarSign className="w-3.5 h-3.5" />
+            <DollarSign className="w-3.5 h-3.5 shrink-0" />
             <span>Amount</span>
           </label>
-          <div className="flex items-center">
-            <span className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-emerald-600 dark:text-emerald-400 mr-2 select-none">
+          <div className="flex items-center min-w-0">
+            <span className="text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-emerald-600 dark:text-emerald-400 mr-2 select-none shrink-0">
               {currencyInfo.symbol}
             </span>
             <input
@@ -407,16 +407,16 @@ export function ExpenseFormModal({
               onKeyDown={handleAmountKeyDown}
               required
               autoFocus
-              className="w-full text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
+              className="w-full min-w-0 text-2xl sm:text-3xl lg:text-4xl font-serif-display font-bold text-[var(--text-primary)] bg-transparent outline-none placeholder:text-[var(--text-muted)]/30"
             />
           </div>
         </div>
 
         {/* Date and Note Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-          <div className="space-y-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 min-w-0">
+          <div className="space-y-1.5 min-w-0">
             <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <Calendar className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Date</span>
             </label>
             <input
@@ -424,13 +424,13 @@ export function ExpenseFormModal({
               value={date}
               onChange={(e) => setDate(e.target.value)}
               required
-              className="w-full px-4 py-3 text-sm font-medium bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 shadow-xs transition-all"
+              className="w-full min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm font-medium bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 shadow-xs transition-all"
             />
           </div>
 
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 min-w-0">
             <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-              <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <FileText className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>Note / Description</span>
             </label>
             <input
@@ -438,21 +438,21 @@ export function ExpenseFormModal({
               placeholder="e.g. Weekly grocery haul"
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              className="w-full px-4 py-3 text-sm bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 placeholder:text-[var(--text-muted)]/50 shadow-xs transition-all"
+              className="w-full min-w-0 px-3.5 sm:px-4 py-2.5 sm:py-3 text-sm bg-white/80 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 rounded-2xl text-[var(--text-primary)] outline-none focus:ring-3 focus:ring-emerald-500/20 focus:border-emerald-500 focus:bg-white dark:focus:bg-black/40 placeholder:text-[var(--text-muted)]/50 shadow-xs transition-all"
             />
           </div>
         </div>
 
         {/* Categories / Tags Section */}
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
+        <div className="space-y-2.5 min-w-0">
+          <div className="flex items-center justify-between min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-                <TagIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <TagIcon className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
                 <span>Categories</span>
               </label>
               {selectedTagIds.length > 0 && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/20 shrink-0">
                   {selectedTagIds.length} selected
                 </span>
               )}
@@ -462,7 +462,7 @@ export function ExpenseFormModal({
               <button
                 type="button"
                 onClick={() => setSelectedTagIds([])}
-                className="text-[11px] font-medium text-[var(--text-muted)] hover:text-rose-500 transition-colors cursor-pointer"
+                className="text-[11px] font-medium text-[var(--text-muted)] hover:text-rose-500 transition-colors cursor-pointer shrink-0"
               >
                 Clear all
               </button>
@@ -470,7 +470,7 @@ export function ExpenseFormModal({
           </div>
 
           {/* Quick Tag Search / Create Combobox Bar */}
-          <div className="relative">
+          <div className="relative min-w-0">
             <Search className="w-3.5 h-3.5 text-[var(--text-muted)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
@@ -485,7 +485,7 @@ export function ExpenseFormModal({
                   }
                 }
               }}
-              className="w-full pl-9 pr-8 py-2 text-xs rounded-xl bg-white/70 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/60 outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all shadow-xs"
+              className="w-full min-w-0 pl-9 pr-8 py-2 text-xs rounded-xl bg-white/70 dark:bg-black/25 border border-black/[0.08] dark:border-white/10 text-[var(--text-primary)] placeholder:text-[var(--text-muted)]/60 outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500/50 transition-all shadow-xs"
             />
             {tagSearchQuery && (
               <button
@@ -499,16 +499,16 @@ export function ExpenseFormModal({
           </div>
 
           {/* Tag Pills & Create Action */}
-          <div className="flex flex-wrap gap-1.5 pt-0.5 max-h-36 overflow-y-auto pr-1">
+          <div className="flex flex-wrap gap-1.5 pt-0.5 max-h-36 overflow-y-auto overflow-x-hidden pr-1 min-w-0 max-w-full">
             {/* If query has no exact match, show instant creation badge! */}
             {!exactMatchExists && tagSearchQuery.trim() && (
               <button
                 type="button"
                 onClick={() => handleQuickCreateTag()}
-                className="min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1.5 shadow-md shadow-emerald-500/25 transition-all cursor-pointer animate-pulse"
+                className="min-h-[34px] max-w-full px-3.5 py-1.5 rounded-full text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1.5 shadow-md shadow-emerald-500/25 transition-all cursor-pointer animate-pulse shrink-0"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Create &quot;{tagSearchQuery.trim()}&quot;</span>
+                <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Create &quot;{tagSearchQuery.trim()}&quot;</span>
               </button>
             )}
 
@@ -521,7 +521,7 @@ export function ExpenseFormModal({
                   key={tag._id}
                   type="button"
                   onClick={() => toggleTag(tag._id)}
-                  className={`min-h-[34px] px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer select-none ${
+                  className={`min-h-[34px] max-w-full px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-2 transition-all cursor-pointer select-none shrink-0 ${
                     isSelected
                       ? "bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold shadow-sm shadow-emerald-500/30 border border-transparent scale-[1.02]"
                       : "bg-white/70 dark:bg-white/[0.06] border border-black/[0.08] dark:border-white/10 text-[var(--text-secondary)] hover:bg-white dark:hover:bg-white/10 hover:border-emerald-500/40 shadow-2xs"
@@ -531,8 +531,8 @@ export function ExpenseFormModal({
                     className="w-2.5 h-2.5 rounded-full shrink-0 ring-1 ring-black/10 dark:ring-white/20"
                     style={{ backgroundColor: color }}
                   />
-                  <span>{tag.name}</span>
-                  {isSelected && <Check className="w-3.5 h-3.5 ml-0.5 stroke-[2.5]" />}
+                  <span className="truncate max-w-[140px] sm:max-w-[200px]">{tag.name}</span>
+                  {isSelected && <Check className="w-3.5 h-3.5 ml-0.5 stroke-[2.5] shrink-0" />}
                 </button>
               );
             })}
@@ -546,44 +546,44 @@ export function ExpenseFormModal({
         </div>
 
         {/* Paid from Savings Toggle */}
-        <div className="space-y-2">
+        <div className="space-y-2 min-w-0 max-w-full">
           <label className="text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-            <PiggyBank className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            <PiggyBank className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
             <span>Savings Fund</span>
           </label>
 
           <button
             type="button"
             onClick={() => setFromSavings(!fromSavings)}
-            className={`w-full flex items-center justify-between p-3.5 rounded-2xl border text-left transition-all cursor-pointer ${
+            className={`w-full flex items-center justify-between p-3 sm:p-3.5 rounded-2xl border text-left transition-all cursor-pointer gap-2 min-w-0 max-w-full ${
               fromSavings
                 ? "bg-amber-500/10 border-amber-500/50 dark:bg-amber-500/15 dark:border-amber-400/40 shadow-xs"
                 : "bg-white/50 dark:bg-white/[0.04] border-black/[0.08] dark:border-white/10 hover:border-amber-400/40 hover:bg-amber-50/50 dark:hover:bg-amber-500/8"
             }`}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
               <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
                 fromSavings ? "bg-amber-500 text-white" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
               }`}>
                 <ArrowDownLeft className="w-4 h-4" />
               </div>
-              <div>
-                <span className={`text-xs font-semibold block ${
+              <div className="min-w-0 flex-1">
+                <span className={`text-xs font-semibold block truncate ${
                   fromSavings ? "text-amber-700 dark:text-amber-300" : "text-[var(--text-primary)]"
                 }`}>
                   Paid from savings
                 </span>
-                <span className="text-[10px] text-[var(--text-muted)]">
+                <span className="text-[10px] text-[var(--text-muted)] block truncate">
                   Deduct this expense from your reserve balance
                 </span>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-medium text-[var(--text-muted)]">
+            <div className="flex items-center gap-2 shrink-0 ml-1">
+              <span className="text-[11px] font-medium text-[var(--text-muted)] whitespace-nowrap">
                 Available: {currencyInfo.symbol}{Math.max(0, savingsBalance).toLocaleString()}
               </span>
-              <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all ${
+              <div className={`w-5 h-5 rounded-full flex items-center justify-center border shrink-0 transition-all ${
                 fromSavings
                   ? "bg-amber-500 border-amber-500 text-white"
                   : "border-black/20 dark:border-white/20 bg-transparent"

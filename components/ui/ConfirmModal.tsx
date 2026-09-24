@@ -98,7 +98,7 @@ export function ConfirmModal({
   const modalContent = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 overflow-hidden">
+        <div className="fixed inset-0 z-[9999] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 overflow-hidden max-w-full w-full">
           {/* Frosted Transparent Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -123,7 +123,7 @@ export function ConfirmModal({
                 onClose();
               }
             }}
-            className="relative z-10 w-full sm:max-w-md bg-gradient-to-b from-white/95 via-[#F8FAF8]/92 to-[#EEF5EF]/95 dark:from-[#122018]/95 dark:via-[#0E1A13]/95 dark:to-[#0A140F]/95 backdrop-blur-2xl border border-white/80 dark:border-white/10 rounded-t-[28px] sm:rounded-3xl shadow-[0_25px_60px_-15px_rgba(20,50,30,0.25),0_0_40px_rgba(34,197,94,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.15)] overflow-hidden"
+            className="relative z-10 w-full max-w-full min-w-0 sm:max-w-md bg-gradient-to-b from-white/95 via-[#F8FAF8]/92 to-[#EEF5EF]/95 dark:from-[#122018]/95 dark:via-[#0E1A13]/95 dark:to-[#0A140F]/95 backdrop-blur-2xl border border-white/80 dark:border-white/10 rounded-t-[28px] sm:rounded-3xl shadow-[0_25px_60px_-15px_rgba(20,50,30,0.25),0_0_40px_rgba(34,197,94,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.15)] overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             role="alertdialog"
             aria-modal="true"
@@ -151,25 +151,25 @@ export function ConfirmModal({
             </button>
 
             {/* Content Body */}
-            <div className="p-6 sm:p-7 relative z-10">
-              <div className="flex items-start gap-4">
+            <div className="p-5 sm:p-7 relative z-10 min-w-0 max-w-full overflow-hidden">
+              <div className="flex items-start gap-3.5 sm:gap-4 min-w-0">
                 {/* Visual Icon Badge */}
                 <div
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 border ${iconConfig.bg} shadow-sm`}
+                  className={`w-11 h-11 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center shrink-0 border ${iconConfig.bg} shadow-sm`}
                 >
                   {iconConfig.icon}
                 </div>
 
-                <div className="space-y-1.5 pt-0.5">
+                <div className="space-y-1.5 pt-0.5 min-w-0 flex-1">
                   <h3
                     id="confirm-modal-title"
-                    className="text-lg sm:text-xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-snug"
+                    className="text-lg sm:text-xl font-heading font-bold text-[var(--text-primary)] tracking-tight leading-snug break-words"
                   >
                     {title}
                   </h3>
                   <div
                     id="confirm-modal-desc"
-                    className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed font-sans"
+                    className="text-xs sm:text-sm text-[var(--text-secondary)] leading-relaxed font-sans break-words"
                   >
                     {message}
                   </div>
@@ -178,7 +178,7 @@ export function ConfirmModal({
             </div>
 
             {/* Actions Footer */}
-            <div className="px-6 py-4 bg-white/60 dark:bg-black/25 backdrop-blur-xl border-t border-black/[0.06] dark:border-white/10 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4 relative z-10">
+            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white/60 dark:bg-black/25 backdrop-blur-xl border-t border-black/[0.06] dark:border-white/10 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4 relative z-10 min-w-0 max-w-full">
               <Button
                 type="button"
                 variant="ghost"
