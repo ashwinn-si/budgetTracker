@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SharedSpendingBreakdown } from "@/components/share/SharedSpendingBreakdown";
 import {
   PieChart,
   TrendingDown,
@@ -522,6 +523,19 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
             </GlassCard>
           )}
         </div>
+
+        {/* Spending Breakdown (Day, Week, Month with Graph and Table) */}
+        <SharedSpendingBreakdown
+          expenses={data.recentExpenses}
+          currencySymbol={currencyInfo.symbol}
+          formatAmount={formatAmount}
+          isFullMode={isFullMode}
+          dateRange={data.range}
+          currentDate={currentDate}
+          tripStartDate={data.trip.startDate}
+          tripEndDate={data.trip.endDate}
+          className={`transition-opacity duration-300 ${isFetching ? 'opacity-50' : 'opacity-100'}`}
+        />
 
         {/* Category Breakdown */}
         <GlassCard variant="mid" className={`p-6 sm:p-8 transition-opacity duration-300 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>

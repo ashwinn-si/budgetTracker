@@ -155,7 +155,7 @@ async function buildSharePayload(params: {
       percentage: combinedTotal > 0 ? ((b.total / combinedTotal) * 100).toFixed(1) : "0",
     }));
 
-  const recentExpenses = expenses.slice(0, mode === "full" ? 200 : 50).map((exp) => {
+  const recentExpenses = expenses.slice(0, mode === "full" ? 500 : 200).map((exp) => {
     const expTripId = (exp.tripId as string) || GENERAL_TRIP_ID;
     const isOwn = expTripId === trip.tripId;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
