@@ -195,6 +195,14 @@ export default function ExpensesPage() {
       });
   }, [allExpenses, searchTerm, selectedTag, selectedMonth]);
 
+  const filteredTotalAmount = useMemo(() => {
+    return filteredAndSortedExpenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+  }, [filteredAndSortedExpenses]);
+
+  const isFiltered = Boolean(
+    searchTerm.trim() || selectedTag !== "all" || selectedMonth !== "all"
+  );
+
   const handleDelete = (clientId: string) => {
     setExpenseToDelete(clientId);
   };
@@ -233,14 +241,36 @@ export default function ExpensesPage() {
           </h1>
         </div>
 
-        <Button
-          variant="primary"
-          onClick={handleNew}
-          icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
-          className="hidden sm:inline-flex shadow-emerald-500/20 shadow-lg"
-        >
-          Add Expense
-        </Button>
+        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 flex-wrap">
+          {/* Dynamic Total Amount Badge */}
+          <div className="flex items-center gap-3 px-3.5 sm:px-4 py-2 rounded-2xl bg-white/60 dark:bg-white/[0.04] border border-black/[0.06] dark:border-white/10 backdrop-blur-md shadow-xs">
+            <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <ReceiptText className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[var(--text-muted)] block leading-tight">
+                  {isFiltered ? "Filtered Total" : "Total Spent"}
+                </span>
+                <span className="text-[10px] text-[var(--text-muted)] font-medium">
+                  ({filteredAndSortedExpenses.length})
+                </span>
+              </div>
+              <span className="text-lg sm:text-2xl font-serif-display font-bold text-emerald-600 dark:text-emerald-400 leading-tight block">
+                {formatAmount(filteredTotalAmount)}
+              </span>
+            </div>
+          </div>
+
+          <Button
+            variant="primary"
+            onClick={handleNew}
+            icon={<Plus className="w-4 h-4 stroke-[2.5]" />}
+            className="hidden sm:inline-flex shadow-emerald-500/20 shadow-lg"
+          >
+            Add Expense
+          </Button>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
