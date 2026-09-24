@@ -1,281 +1,26 @@
 "use client";
 
-import React, { useEffect, useState, useRef, use, Suspense } from "react";
+import React, { useEffect, useState, use, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { SharedSpendingBreakdown } from "@/components/share/SharedSpendingBreakdown";
-import {
-  PieChart,
-  TrendingDown,
-  TrendingUp,
-  AlertCircle,
-  Moon,
-  Sun,
-  ChevronLeft,
-  ChevronRight,
-  ChevronDown,
-  Receipt,
-  Plane,
-  Check,
-} from "lucide-react";
+import { AlertCircle, Moon, Sun, Plane } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { SUPPORTED_CURRENCIES } from "@/lib/currency";
 import { useTheme } from "@/context/ThemeContext";
 import { Loader } from "@/components/ui/Loader";
 import { GENERAL_TRIP_ID } from "@/lib/trips";
 
-interface CategoryBreakdown {
-  tagId: string;
-  tagName: string;
-  colorKey: string;
-  total: number;
-  percentage: string;
-  isMirrored?: boolean;
-  sourceTripId?: string;
-  sourceTripName?: string;
-}
-
-interface RecentExpenseTag {
-  name: string;
-  colorKey: string;
-}
-
-interface RecentExpenseSourceTrip {
-  tripId: string;
-  name: string;
-  emoji: string;
-  colorKey: string;
-}
-
-interface RecentExpense {
-  date: string;
-  note: string;
-  amount: number;
-  tags: RecentExpenseTag[];
-  sourceTrip: RecentExpenseSourceTrip | null;
-}
-
-interface TripInfo {
-  tripId: string;
-  name: string;
-  emoji: string;
-  colorKey: string;
-  status: "active" | "completed";
-  startDate: string | null;
-  endDate: string | null;
-}
-
-interface CombinedTripOption {
-  tripId: string;
-  name: string;
-  emoji: string;
-  colorKey: string;
-  status: "active" | "completed";
-}
-
-interface CombinedInfo {
-  trips: CombinedTripOption[];
-  selectedTripId: string;
-}
-
-interface SharedData {
-  userName: string;
-  currency: string;
-  mode: "monthly" | "full";
-  totalSpent: number;
-  totalSpentThisMonth: number;
-  totalSavings: number | null;
-  categoryBreakdown: CategoryBreakdown[];
-  recentExpenses: RecentExpense[];
-  expenseCount: number;
-  range: { from: string | null; to: string | null } | null;
-  dailyAverage: number | null;
-  trip: TripInfo;
-  month: string;
-  year: number;
-  combined?: CombinedInfo | null;
-}
-
-function TripSwitcher({
-  combined,
-  onSelect,
-}: {
-  combined: CombinedInfo;
-  onSelect: (tripId: string) => void;
-}) {
-  const [isOpen, setIsOpen] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const selected = combined.trips.find((t) => t.tripId === combined.selectedTripId) || combined.trips[0];
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isOpen]);
-
-  const renderOption = (t: CombinedTripOption) => {
-    const active = t.tripId === selected.tripId;
-    return (
-      <button
-        key={t.tripId}
-        type="button"
-        onClick={() => {
-          onSelect(t.tripId);
-          setIsOpen(false);
-        }}
-        className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors cursor-pointer ${
-          active
-            ? "bg-emerald-500/10 text-[var(--text-primary)]"
-            : "hover:bg-black/5 dark:hover:bg-white/5 text-[var(--text-secondary)]"
-        }`}
-      >
-        <span
-          className="w-8 h-8 rounded-xl flex items-center justify-center text-sm shrink-0 border"
-          style={{
-            backgroundColor: `${t.colorKey || "#22C55E"}20`,
-            borderColor: `${t.colorKey || "#22C55E"}40`,
-            color: t.colorKey || "#22C55E",
-          }}
-        >
-          {t.emoji || <Plane className="w-4 h-4" />}
-        </span>
-        <span className="flex-1 min-w-0 text-sm font-medium truncate">{t.name}</span>
-        {t.status === "completed" && (
-          <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-black/5 dark:bg-white/10 text-[var(--text-muted)] shrink-0">
-            Done
-          </span>
-        )}
-        {active && <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />}
-      </button>
-    );
-  };
-
-  return (
-    <div ref={wrapperRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
-      >
-        <span
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-sm shrink-0 border"
-          style={{
-            backgroundColor: `${selected.colorKey || "#22C55E"}20`,
-            borderColor: `${selected.colorKey || "#22C55E"}40`,
-            color: selected.colorKey || "#22C55E",
-          }}
-        >
-          {selected.emoji || <Plane className="w-3.5 h-3.5" />}
-        </span>
-        <span className="text-sm font-medium text-[var(--text-primary)] max-w-[140px] truncate">
-          {selected.name}
-        </span>
-        <ChevronDown className={`w-4 h-4 text-[var(--text-muted)] transition-transform ${isOpen ? "rotate-180" : ""}`} />
-      </button>
-
-      {isOpen && (
-        <>
-          {/* Mobile: bottom-sheet style list */}
-          <div className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm sm:hidden" onClick={() => setIsOpen(false)} />
-          <div className="fixed inset-x-0 bottom-0 z-50 sm:hidden rounded-t-[28px] bg-white dark:bg-neutral-900 border-t border-black/10 dark:border-white/10 max-h-[70vh] overflow-y-auto pb-[env(safe-area-inset-bottom,0px)] shadow-2xl">
-            <div className="flex justify-center pt-3 pb-1">
-              <div className="w-12 h-1.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
-            </div>
-            <div className="px-2 pb-2">{combined.trips.map(renderOption)}</div>
-          </div>
-
-          {/* Desktop: absolutely-positioned popover */}
-          <div className="hidden sm:block absolute right-0 mt-2 w-72 rounded-2xl bg-white dark:bg-neutral-900 border border-black/10 dark:border-white/10 shadow-2xl overflow-hidden z-50 py-1">
-            {combined.trips.map(renderOption)}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function FromTripPill({
-  name,
-  emoji,
-  colorKey,
-}: {
-  name: string;
-  emoji?: string;
-  colorKey?: string;
-}) {
-  const color = colorKey || "#22C55E";
-  return (
-    <span
-      className="inline-flex items-center gap-1 rounded-full font-medium border max-w-[160px] px-2 py-0.5 text-[10px]"
-      style={{ backgroundColor: `${color}1F`, borderColor: `${color}40`, color }}
-      title={`From ${name}`}
-    >
-      {emoji ? <span className="shrink-0">{emoji}</span> : <Plane className="w-3 h-3 shrink-0" />}
-      <span className="truncate">From {name}</span>
-    </span>
-  );
-}
-
-function ExpenseRow({
-  exp,
-  formatAmount,
-  showDate,
-  formatExpenseDate,
-}: {
-  exp: RecentExpense;
-  formatAmount: (val: number) => string;
-  showDate: boolean;
-  formatExpenseDate: (val: string) => string;
-}) {
-  return (
-    <div className="flex items-center gap-3 p-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-      {showDate && (
-        <div className="w-14 shrink-0 text-xs font-medium text-[var(--text-muted)]">
-          {formatExpenseDate(exp.date)}
-        </div>
-      )}
-      <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-        <span className="text-sm text-[var(--text-primary)] truncate">
-          {exp.note || "Expense"}
-        </span>
-        {exp.tags.map((tag) => (
-          <span
-            key={tag.name}
-            className="text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0"
-            style={{
-              backgroundColor: `${tag.colorKey}1F`,
-              borderColor: `${tag.colorKey}40`,
-              color: tag.colorKey,
-            }}
-          >
-            {tag.name}
-          </span>
-        ))}
-        {exp.sourceTrip && (
-          <FromTripPill
-            name={exp.sourceTrip.name}
-            emoji={exp.sourceTrip.emoji}
-            colorKey={exp.sourceTrip.colorKey}
-          />
-        )}
-      </div>
-      <div className="shrink-0 font-serif-display font-medium text-[var(--text-primary)]">
-        {formatAmount(exp.amount)}
-      </div>
-    </div>
-  );
-}
+import { SharedData } from "@/components/share/types";
+import { TripSwitcher } from "@/components/share/TripSwitcher";
+import { SharedMetricCards } from "@/components/share/SharedMetricCards";
+import { SharedSpendingBreakdown } from "@/components/share/SharedSpendingBreakdown";
+import { SharedCategoryBreakdown } from "@/components/share/SharedCategoryBreakdown";
+import { SharedExpensesList } from "@/components/share/SharedExpensesList";
 
 function SharedDashboardContent({ shareId }: { shareId: string }) {
-
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -284,16 +29,11 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
   const [loading, setLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedTripId, setSelectedTripId] = useState<string | null>(() => searchParams.get("tripId"));
-  const [currentPage, setCurrentPage] = useState(1);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const ITEMS_PER_PAGE = 10;
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(() =>
+    searchParams.get("tripId")
+  );
 
   const { theme, toggleTheme } = useTheme();
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [shareId, currentDate, selectedTripId]);
 
   useEffect(() => {
     const fetchSharedData = async () => {
@@ -347,7 +87,9 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
             <AlertCircle className="w-8 h-8" />
           </div>
           <h1 className="text-xl font-bold text-[var(--text-primary)]">Dashboard Unavailable</h1>
-          <p className="text-[var(--text-secondary)]">{error || "This link may be invalid or sharing has been disabled."}</p>
+          <p className="text-[var(--text-secondary)]">
+            {error || "This link may be invalid or sharing has been disabled."}
+          </p>
         </GlassCard>
       </div>
     );
@@ -376,45 +118,9 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
     return `${format(from, "d MMM")} – ${format(to, sameYear ? "d MMM yyyy" : "d MMM yyyy")}`;
   };
 
-  const groupExpensesByDay = (list: RecentExpense[]) => {
-    const groups: { dateKey: string; label: string; items: RecentExpense[] }[] = [];
-    for (const exp of list) {
-      const dateKey = exp.date.slice(0, 10);
-      const last = groups[groups.length - 1];
-      if (last && last.dateKey === dateKey) {
-        last.items.push(exp);
-      } else {
-        groups.push({ dateKey, label: format(parseISO(exp.date), "EEE, d MMM"), items: [exp] });
-      }
-    }
-    return groups;
-  };
-
-  const totalExpenseItems = data.recentExpenses.length;
-  const totalPages = Math.ceil(totalExpenseItems / ITEMS_PER_PAGE) || 1;
-  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
-  const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const paginatedExpenses = data.recentExpenses.slice(startIndex, endIndex);
-
-  const handlePageChange = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages || newPage === safeCurrentPage) return;
-    setCurrentPage(newPage);
-    scrollContainerRef.current?.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
-  const getPaginationRange = (current: number, total: number): (number | string)[] => {
-    if (total <= 5) {
-      return Array.from({ length: total }, (_, i) => i + 1);
-    }
-    if (current <= 3) {
-      return [1, 2, 3, 4, "...", total];
-    }
-    if (current >= total - 2) {
-      return [1, "...", total - 3, total - 2, total - 1, total];
-    }
-    return [1, "...", current - 1, current, current + 1, "...", total];
-  };
+  const transitionClass = `transition-opacity duration-300 ${
+    isFetching ? "opacity-50" : "opacity-100"
+  }`;
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 font-sans selection:bg-emerald-500/30">
@@ -425,7 +131,6 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
       </div>
 
       <main className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 pt-8 pb-24 space-y-8">
-
         {/* Top Navbar */}
         <div className="flex items-center justify-between mb-2">
           <Link href="/" className="flex items-center gap-2 group">
@@ -444,15 +149,15 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
           <button
             onClick={toggleTheme}
             className="p-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/10 dark:hover:bg-white/10 transition-colors cursor-pointer"
+            aria-label="Toggle color theme"
           >
             {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
         </div>
 
-        <PageHeader
-          title={<>{data.userName}&apos;s <em>Finances</em></>}
-        />
+        <PageHeader title={<>{data.userName}&apos;s <em>Finances</em></>} />
 
+        {/* Trip Switcher / Banner if applicable */}
         {(!isGeneral || data.combined) && (
           <div className="flex items-center justify-between gap-2 -mt-4">
             <div className="flex items-center gap-2 min-w-0">
@@ -479,52 +184,20 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
           </div>
         )}
 
-        <div className={`grid grid-cols-1 ${data.totalSavings !== null ? "md:grid-cols-2" : ""} gap-6`}>
-          {/* Spend Card */}
-          <GlassCard variant="strong" className="p-6 sm:p-8 flex flex-col justify-center">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
-                <TrendingDown className="w-5 h-5" />
-              </div>
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                {isFullMode ? "Total trip spend" : `Spent in ${data.month}`}
-              </h2>
-            </div>
-            <div className="text-4xl sm:text-5xl font-serif-display font-bold text-[var(--text-primary)] tracking-tight">
-              {formatAmount(isFullMode ? data.totalSpent : data.totalSpentThisMonth)}
-            </div>
-            {isFullMode && (
-              <div className="mt-3 space-y-0.5">
-                {formatRange(data.range) && (
-                  <p className="text-sm text-[var(--text-secondary)]">{formatRange(data.range)}</p>
-                )}
-                <p className="text-xs text-[var(--text-muted)]">
-                  {data.expenseCount} expense{data.expenseCount === 1 ? "" : "s"}
-                  {data.dailyAverage != null && ` · ${formatAmount(data.dailyAverage)}/day`}
-                </p>
-              </div>
-            )}
-          </GlassCard>
+        {/* Spend & Savings Metric Cards */}
+        <SharedMetricCards
+          isFullMode={isFullMode}
+          totalSpent={data.totalSpent}
+          totalSpentThisMonth={data.totalSpentThisMonth}
+          totalSavings={data.totalSavings}
+          month={data.month}
+          expenseCount={data.expenseCount}
+          dailyAverage={data.dailyAverage}
+          formattedRange={formatRange(data.range)}
+          formatAmount={formatAmount}
+        />
 
-          {/* Savings Card */}
-          {data.totalSavings !== null && (
-            <GlassCard variant="strong" className="p-6 sm:p-8 flex flex-col justify-center">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-2xl bg-teal-500/10 text-teal-600 dark:text-teal-400 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                  Current Savings Balance
-                </h2>
-              </div>
-              <div className="text-4xl sm:text-5xl font-serif-display font-bold text-[var(--text-primary)] tracking-tight">
-                {formatAmount(data.totalSavings)}
-              </div>
-            </GlassCard>
-          )}
-        </div>
-
-        {/* Spending Breakdown (Day, Week, Month with Graph and Table) */}
+        {/* Spending Breakdown Section (Day, Week, Month with Graph & Table) */}
         <SharedSpendingBreakdown
           expenses={data.recentExpenses}
           currencySymbol={currencyInfo.symbol}
@@ -534,244 +207,47 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
           currentDate={currentDate}
           tripStartDate={data.trip.startDate}
           tripEndDate={data.trip.endDate}
-          className={`transition-opacity duration-300 ${isFetching ? 'opacity-50' : 'opacity-100'}`}
+          className={transitionClass}
         />
 
-        {/* Category Breakdown */}
-        <GlassCard variant="mid" className={`p-6 sm:p-8 transition-opacity duration-300 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
-                <PieChart className="w-5 h-5" />
-              </div>
-              <div>
-                <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)]">
-                  Category Breakdown
-                </h2>
-                <p className="text-sm text-[var(--text-muted)]">
-                  {isFullMode ? "Whole trip" : `For ${data.month} ${data.year}`}
-                </p>
-              </div>
-            </div>
+        {/* Category Breakdown Card */}
+        <SharedCategoryBreakdown
+          categories={data.categoryBreakdown}
+          isFullMode={isFullMode}
+          month={data.month}
+          year={data.year}
+          currentDate={currentDate}
+          onPrevMonth={() =>
+            setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+          }
+          onNextMonth={() =>
+            setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+          }
+          formatAmount={formatAmount}
+          className={transitionClass}
+        />
 
-            {!isFullMode && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                  className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <span className="text-sm font-medium w-24 text-center text-[var(--text-primary)]">
-                  {data.month} {data.year}
-                </span>
-                <button
-                  onClick={() => setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                  className="p-2 rounded-lg bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors text-[var(--text-secondary)] cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                  disabled={currentDate.getMonth() === new Date().getMonth() && currentDate.getFullYear() === new Date().getFullYear()}
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            )}
-          </div>
-
-          {data.categoryBreakdown.length > 0 ? (
-            <div className="space-y-4">
-              {data.categoryBreakdown.map((cat) => (
-                <div key={cat.tagId} className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
-                    style={{ backgroundColor: `${cat.colorKey}20`, color: cat.colorKey }}
-                  >
-                    <span className="text-sm font-bold">{cat.tagName.replace(/^[^\p{L}\p{N}]+/u, "").charAt(0).toUpperCase() || cat.tagName.charAt(0)}</span>
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-1.5 gap-3">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="font-semibold text-[var(--text-primary)] truncate">
-                          {cat.tagName}
-                        </span>
-                        {cat.isMirrored && (
-                          <FromTripPill name={cat.sourceTripName || cat.tagName} colorKey={cat.colorKey} />
-                        )}
-                      </div>
-                      <span className="font-serif-display font-medium text-[var(--text-primary)] shrink-0">
-                        {formatAmount(cat.total)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-1.5 rounded-full bg-black/5 dark:bg-white/5 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-1000 ease-out"
-                          style={{
-                            width: `${Math.min(100, Math.max(0, parseFloat(cat.percentage)))}%`,
-                            backgroundColor: cat.colorKey
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs font-medium text-[var(--text-muted)] w-9 text-right shrink-0">
-                        {cat.percentage}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="py-12 text-center text-[var(--text-muted)]">
-              {isFullMode ? "No expenses recorded for this trip." : "No expenses recorded for this month."}
-            </div>
-          )}
-        </GlassCard>
-
-        {/* Recent / All Expenses */}
-        <GlassCard variant="mid" className={`p-6 sm:p-8 transition-opacity duration-300 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
-          <div className="flex items-center justify-between gap-4 mb-6">
-            <div className="flex items-center gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                <Receipt className="w-5 h-5" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-xl font-serif-display font-medium text-[var(--text-primary)] truncate">
-                  {isFullMode ? "All expenses" : "Recent Expenses"}
-                </h2>
-                <p className="text-sm text-[var(--text-muted)] truncate">
-                  {isFullMode ? "Whole trip" : `For ${data.month} ${data.year}`}
-                </p>
-              </div>
-            </div>
-
-            {totalExpenseItems > 0 && (
-              <span className="shrink-0 text-xs font-medium px-2.5 py-1 rounded-full bg-black/5 dark:bg-white/5 text-[var(--text-muted)] border border-black/5 dark:border-white/5">
-                {totalExpenseItems} {totalExpenseItems === 1 ? "expense" : "expenses"}
-              </span>
-            )}
-          </div>
-
-          {totalExpenseItems > 0 ? (
-            <>
-              <div
-                ref={scrollContainerRef}
-                className="max-h-[440px] sm:max-h-[520px] overflow-y-auto custom-scrollbar pr-2 -mr-2"
-              >
-                {isFullMode ? (
-                  <div className="space-y-5">
-                    {groupExpensesByDay(paginatedExpenses).map((group) => (
-                      <div key={group.dateKey}>
-                        <div className="sticky top-0 z-10 py-1.5 px-3 mb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)] bg-neutral-100/90 dark:bg-neutral-900/90 backdrop-blur-md rounded-lg border border-black/5 dark:border-white/5">
-                          {group.label}
-                        </div>
-                        <div className="space-y-2">
-                          {group.items.map((exp, idx) => (
-                            <ExpenseRow
-                              key={`${group.dateKey}-${idx}-${exp.note}`}
-                              exp={exp}
-                              formatAmount={formatAmount}
-                              showDate={false}
-                              formatExpenseDate={formatExpenseDate}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {paginatedExpenses.map((exp, idx) => (
-                      <ExpenseRow
-                        key={`${exp.date}-${idx}-${exp.note}`}
-                        exp={exp}
-                        formatAmount={formatAmount}
-                        showDate
-                        formatExpenseDate={formatExpenseDate}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Pagination controls */}
-              {totalPages > 1 && (
-                <div className="pt-4 mt-5 border-t border-black/5 dark:border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-[var(--text-muted)]">
-                  <div>
-                    Showing{" "}
-                    <span className="font-semibold text-[var(--text-primary)]">
-                      {startIndex + 1}–{Math.min(endIndex, totalExpenseItems)}
-                    </span>{" "}
-                    of{" "}
-                    <span className="font-semibold text-[var(--text-primary)]">
-                      {totalExpenseItems}
-                    </span>{" "}
-                    expenses
-                  </div>
-
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handlePageChange(safeCurrentPage - 1)}
-                      disabled={safeCurrentPage === 1}
-                      aria-label="Previous page"
-                      className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl border border-black/5 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-1 font-medium text-[var(--text-primary)] cursor-pointer"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      <span className="hidden sm:inline">Prev</span>
-                    </button>
-
-                    <div className="flex items-center gap-1 px-1">
-                      {getPaginationRange(safeCurrentPage, totalPages).map((p, idx) =>
-                        p === "..." ? (
-                          <span key={`ellipsis-${idx}`} className="px-2 py-1 text-[var(--text-muted)]">
-                            ...
-                          </span>
-                        ) : (
-                          <button
-                            key={`page-${p}`}
-                            type="button"
-                            onClick={() => handlePageChange(p as number)}
-                            aria-current={safeCurrentPage === p ? "page" : undefined}
-                            className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl text-xs font-medium transition-all cursor-pointer ${
-                              safeCurrentPage === p
-                                ? "bg-emerald-500 text-white font-semibold shadow-sm shadow-emerald-500/20"
-                                : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/5"
-                            }`}
-                          >
-                            {p}
-                          </button>
-                        )
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => handlePageChange(safeCurrentPage + 1)}
-                      disabled={safeCurrentPage === totalPages}
-                      aria-label="Next page"
-                      className="p-1.5 sm:px-2.5 sm:py-1 rounded-xl border border-black/5 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-30 disabled:pointer-events-none transition-all flex items-center gap-1 font-medium text-[var(--text-primary)] cursor-pointer"
-                    >
-                      <span className="hidden sm:inline">Next</span>
-                      <ChevronRight className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="py-12 text-center text-[var(--text-muted)]">
-              {isFullMode ? "No expenses recorded for this trip." : "No expenses recorded for this month."}
-            </div>
-          )}
-        </GlassCard>
-
+        {/* Recent / All Expenses Card */}
+        <SharedExpensesList
+          expenses={data.recentExpenses}
+          isFullMode={isFullMode}
+          month={data.month}
+          year={data.year}
+          formatAmount={formatAmount}
+          formatExpenseDate={formatExpenseDate}
+          className={transitionClass}
+          resetKey={`${shareId}-${currentDate.toISOString()}-${selectedTripId}`}
+        />
       </main>
     </div>
   );
 }
 
-export default function SharedDashboardPage({ params }: { params: Promise<{ shareId: string }> }) {
-  // Unwrap params according to Next.js 15+ conventions
+export default function SharedDashboardPage({
+  params,
+}: {
+  params: Promise<{ shareId: string }>;
+}) {
   const { shareId } = use(params);
 
   return (
