@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Plane, ChevronDown, Check } from "lucide-react";
 import { CombinedInfo, CombinedTripOption } from "./types";
+import { useKeyboardViewport } from "@/lib/useKeyboardViewport";
 
 export function TripSwitcher({
   combined,
@@ -13,6 +14,7 @@ export function TripSwitcher({
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const keyboardBox = useKeyboardViewport(isOpen);
   const selected =
     combined.trips.find((t) => t.tripId === combined.selectedTripId) || combined.trips[0];
 
@@ -98,7 +100,20 @@ export function TripSwitcher({
             className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm sm:hidden"
             onClick={() => setIsOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 z-50 sm:hidden rounded-t-[28px] bg-white dark:bg-neutral-900 border-t border-black/10 dark:border-white/10 max-h-[70vh] overflow-y-auto pb-[env(safe-area-inset-bottom,0px)] shadow-2xl">
+          <div
+            className={`fixed inset-x-0 bottom-0 z-50 sm:hidden rounded-t-[28px] bg-white dark:bg-neutral-900 border-t border-black/10 dark:border-white/10 max-h-[70vh] overflow-y-auto overscroll-contain ${keyboardBox ? "" : "pb-[env(safe-area-inset-bottom,0px)]"} shadow-2xl`}
+            style={
+              keyboardBox
+                ? {
+                    // Anchor to the bottom of the visible area (just above the keyboard)
+                    bottom:
+                      document.documentElement.clientHeight -
+                      (keyboardBox.top + keyboardBox.height),
+                    maxHeight: keyboardBox.height * 0.7,
+                  }
+                : undefined
+            }
+          >
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-12 h-1.5 rounded-full bg-neutral-300 dark:bg-neutral-600" />
             </div>

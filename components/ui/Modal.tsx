@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import { useKeyboardViewport } from "@/lib/useKeyboardViewport";
 
 interface ModalProps {
   isOpen: boolean;
@@ -36,6 +37,19 @@ export function Modal({
     };
   }, [isOpen]);
 
+  const keyboardBox = useKeyboardViewport(isOpen);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Once the sheet has resized around the keyboard, keep the focused field visible
+  // inside the sheet's own scroll area instead of letting the page pan.
+  useEffect(() => {
+    if (!keyboardBox) return;
+    const el = document.activeElement;
+    if (el instanceof HTMLElement && bodyRef.current?.contains(el)) {
+      el.scrollIntoView({ block: "nearest" });
+    }
+  }, [keyboardBox]);
+
   // Escape key listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -57,7 +71,14 @@ export function Modal({
   const modalContent = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 overflow-hidden max-w-full w-full">
+        <div
+          className="fixed inset-0 z-[9999] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 overflow-hidden max-w-full w-full"
+          style={
+            keyboardBox
+              ? { top: keyboardBox.top, height: keyboardBox.height, bottom: "auto" }
+              : undefined
+          }
+        >
           {/* Backdrop with Motion Fade & Blur */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -83,6 +104,7 @@ export function Modal({
               }
             }}
             className={`relative z-10 w-full max-w-full min-w-0 ${maxWidthClasses[maxWidth]} bg-gradient-to-b from-white/95 via-[#F8FAF8]/92 to-[#EEF5EF]/95 dark:from-[#112017]/95 dark:via-[#0E1A13]/95 dark:to-[#0A140F]/95 backdrop-blur-2xl border border-white/80 dark:border-emerald-500/20 rounded-t-[28px] sm:rounded-3xl max-h-[90dvh] sm:max-h-[85vh] flex flex-col shadow-[0_25px_60px_-15px_rgba(20,50,30,0.2),0_0_40px_rgba(34,197,94,0.1)] overflow-hidden`}
+            style={keyboardBox ? { maxHeight: keyboardBox.height - 8 } : undefined}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Ambient Background Gradient Orbs */}
@@ -116,13 +138,16 @@ export function Modal({
             </div>
 
             {/* Modal Body with internal scroll */}
-            <div className="px-4 sm:px-6 py-4 sm:py-5 overflow-y-auto overflow-x-hidden flex-1 min-w-0 max-w-full text-[var(--text-secondary)] space-y-4 relative z-10">
+            <div
+              ref={bodyRef}
+              className="px-4 sm:px-6 py-4 sm:py-5 overscroll-contain overflow-y-auto overflow-x-hidden flex-1 min-w-0 max-w-full text-[var(--text-secondary)] space-y-4 relative z-10"
+            >
               {children}
             </div>
 
             {/* Modal Sticky Footer (Thumb reachable on mobile) */}
             {footer && (
-              <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-black/[0.06] dark:border-white/10 bg-white/60 dark:bg-black/30 backdrop-blur-xl pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 sm:gap-3 relative z-10 min-w-0 max-w-full">
+              <div className={`px-4 sm:px-6 py-3 sm:py-4 border-t border-black/[0.06] dark:border-white/10 bg-white/60 dark:bg-black/30 backdrop-blur-xl ${keyboardBox ? "pb-3" : "pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"} sm:pb-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 sm:gap-3 relative z-10 min-w-0 max-w-full`}>
                 {footer}
               </div>
             )}

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AlertTriangle, Trash2, X, HelpCircle } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { Button } from "@/components/ui/Button";
+import { useKeyboardViewport } from "@/lib/useKeyboardViewport";
 
 export type ConfirmVariant = "danger" | "warning" | "default";
 
@@ -34,12 +35,17 @@ export function ConfirmModal({
   const [internalLoading, setInternalLoading] = useState(false);
   const isSubmittingRef = React.useRef(false);
 
-  // Reset lock when modal opens or closes
+  // Reset loading state when the modal closes (adjusted during render rather
+  // than in an effect to avoid an extra cascading render)
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (prevIsOpen !== isOpen) {
+    setPrevIsOpen(isOpen);
+    if (!isOpen) setInternalLoading(false);
+  }
+
+  // Reset submit lock when modal closes
   useEffect(() => {
-    if (!isOpen) {
-      isSubmittingRef.current = false;
-      setInternalLoading(false);
-    }
+    if (!isOpen) isSubmittingRef.current = false;
   }, [isOpen]);
 
   // Lock body scroll when opened
@@ -107,10 +113,19 @@ export function ConfirmModal({
     },
   }[variant];
 
+  const keyboardBox = useKeyboardViewport(isOpen);
+
   const modalContent = (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[9999] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 overflow-hidden max-w-full w-full">
+        <div
+          className="fixed inset-0 z-[9999] flex flex-col justify-end sm:justify-center sm:items-center p-0 sm:p-4 overflow-hidden max-w-full w-full"
+          style={
+            keyboardBox
+              ? { top: keyboardBox.top, height: keyboardBox.height, bottom: "auto" }
+              : undefined
+          }
+        >
           {/* Frosted Transparent Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
@@ -136,6 +151,7 @@ export function ConfirmModal({
               }
             }}
             className="relative z-10 w-full max-w-full min-w-0 sm:max-w-md bg-gradient-to-b from-white/95 via-[#F8FAF8]/92 to-[#EEF5EF]/95 dark:from-[#122018]/95 dark:via-[#0E1A13]/95 dark:to-[#0A140F]/95 backdrop-blur-2xl border border-white/80 dark:border-white/10 rounded-t-[28px] sm:rounded-3xl shadow-[0_25px_60px_-15px_rgba(20,50,30,0.25),0_0_40px_rgba(34,197,94,0.08),inset_0_1px_0_rgba(255,255,255,0.9)] dark:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.7),inset_0_1px_0_rgba(255,255,255,0.15)] overflow-hidden"
+            style={keyboardBox ? { maxHeight: keyboardBox.height - 8, overflowY: "auto" } : undefined}
             onClick={(e) => e.stopPropagation()}
             role="alertdialog"
             aria-modal="true"
@@ -190,7 +206,7 @@ export function ConfirmModal({
             </div>
 
             {/* Actions Footer */}
-            <div className="px-4 sm:px-6 py-3.5 sm:py-4 bg-white/60 dark:bg-black/25 backdrop-blur-xl border-t border-black/[0.06] dark:border-white/10 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] sm:pb-4 relative z-10 min-w-0 max-w-full">
+            <div className={`px-4 sm:px-6 py-3.5 sm:py-4 bg-white/60 dark:bg-black/25 backdrop-blur-xl border-t border-black/[0.06] dark:border-white/10 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5 ${keyboardBox ? "pb-3" : "pb-[calc(1rem+env(safe-area-inset-bottom,0px))]"} sm:pb-4 relative z-10 min-w-0 max-w-full`}>
               <Button
                 type="button"
                 variant="ghost"
