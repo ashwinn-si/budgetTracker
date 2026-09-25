@@ -151,6 +151,11 @@ export class BudgetDatabase extends Dexie {
             }
           });
       });
+
+    // v6: adds entityId index on deleteLogs for deduplication and soft-delete queries
+    this.version(6).stores({
+      deleteLogs: "id, userId, entityType, entityId, deletedAt",
+    });
   }
 }
 

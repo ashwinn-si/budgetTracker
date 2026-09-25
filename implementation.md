@@ -228,9 +228,19 @@ lib/
   db.ts                           # cached Mongoose connection
   auth.ts
   offline/
-    db.ts                         # Dexie schema
-    syncQueue.ts
-    useSync.ts
+    db.ts                         # Dexie schema (v6: deleteLogs indexed by entityId)
+    useSync.ts                    # online/offline listener, flush + pull loop
+    syncQueue/                    # offline sync layer — import via "@/lib/offline/syncQueue"
+      index.ts                    # public barrel (only import path callers should use)
+      auth.ts                     # auth headers, stored token, silent refresh, isOnline
+      directSync.ts               # executeDirectSync, sendOrQueue, reconcileTagMap
+      expenses.ts / savings.ts    # queue*Creation / Update / Deletion
+      tags.ts                     # tag queue helpers + deduplicateLocalTags
+      trips.ts                    # trip queue helpers (cascade delete of tags/expenses)
+      deleteLogs.ts               # Recycle Bin: canonical ids, dedup, permanent delete, clear
+      recovery.ts                 # recoverDeletedItem
+      flush.ts                    # flushSyncQueue, clearAllLocalExpenses
+      pull/                       # pullFromServer: trips → tags → expenses → savings → deleteLogs
 context/
   LoadingContext.tsx
   ThemeContext.tsx
@@ -285,7 +295,10 @@ models/
 4. All writes land in IndexedDB immediately with a `clientId` and `syncStatus: "pending"`, then get queued.
 5. `useSync` hook: listens for `online`/`offline`, flushes the queue via `POST /api/expenses/sync` (keyed by `clientId` for server-side dedup) whenever online.
 6. Conflict rule for v1: last-write-wins by `updatedAt`, server timestamp as tiebreaker — reasonable for a single-user app.
-7. Roll the per-expense `syncStatus` up into a single overall status ("All synced" / "Syncing…" / "N pending") and surface it on the **profile page**, plus a "last synced" timestamp.
+7. **Module layout**: the sync layer lives in `lib/offline/syncQueue/` (one file per concern — see the file tree above). Every write goes through `sendOrQueue()` in `directSync.ts`: send directly when online, otherwise (or on failure) append to `db.syncQueue`.
+8. **Recycle Bin / delete logs**: each local delete log is stored under the canonical id `del_${entityId}` — at most one row per entity. `writeDeleteLog()` purges any existing rows for the entity before writing, server logs are mapped with `mapServerDeleteLog()`, and `deduplicateDeleteLogs()` (run on mount, after pull, recovery and permanent delete) collapses legacy duplicates and drops logs for entities that are alive again. Server `DELETE /api/delete-logs` and `POST /api/delete-logs/recover` remove all logs matching the `_id` **or** `entityId`.
+9. **Delete confirmation**: `ConfirmModal` guards against double-submit with a ref lock; pages clear their "item to delete" state *before* awaiting the queue call so a second click cannot fire the same deletion twice.
+10. Roll the per-expense `syncStatus` up into a single overall status ("All synced" / "Syncing…" / "N pending") and surface it on the **profile page**, plus a "last synced" timestamp.
 
 ### Phase 6 — Export (Excel + Google Sheets)
 1. `GET /api/export/excel`: query the user's (filtered) expenses, build a workbook with `exceljs`, stream it back as an attachment.

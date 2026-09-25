@@ -210,12 +210,12 @@ export default function ExpensesPage() {
   const confirmDeleteExpense = async () => {
     if (!expenseToDelete) return;
     const clientId = expenseToDelete;
+    setExpenseToDelete(null);
     await queueExpenseDeletion(clientId);
     const saving = await db.savings.where("linkedExpenseId").equals(clientId).first();
     if (saving) {
       await queueSavingDeletion(saving.clientId);
     }
-    setExpenseToDelete(null);
   };
 
   const handleEdit = (expense: LocalExpense) => {

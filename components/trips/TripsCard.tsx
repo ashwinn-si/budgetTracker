@@ -107,10 +107,12 @@ export function TripsCard() {
   };
 
   const handleDelete = async () => {
-    if (!tripToDelete) return;
+    if (!tripToDelete || isDeleting) return;
+    const toDelete = tripToDelete;
+    setTripToDelete(null);
     setIsDeleting(true);
     try {
-      const ok = await queueTripDeletion(tripToDelete.tripId);
+      const ok = await queueTripDeletion(toDelete.tripId);
       if (ok) {
         toast.success("Trip deleted");
       } else {
@@ -121,7 +123,6 @@ export function TripsCard() {
       toast.error("Failed to delete trip");
     } finally {
       setIsDeleting(false);
-      setTripToDelete(null);
     }
   };
 

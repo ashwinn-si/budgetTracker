@@ -32,6 +32,15 @@ export function ConfirmModal({
   isLoading = false,
 }: ConfirmModalProps) {
   const [internalLoading, setInternalLoading] = useState(false);
+  const isSubmittingRef = React.useRef(false);
+
+  // Reset lock when modal opens or closes
+  useEffect(() => {
+    if (!isOpen) {
+      isSubmittingRef.current = false;
+      setInternalLoading(false);
+    }
+  }, [isOpen]);
 
   // Lock body scroll when opened
   useEffect(() => {
@@ -48,7 +57,7 @@ export function ConfirmModal({
   // Escape key listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isOpen && !isLoading && !internalLoading) {
+      if (e.key === "Escape" && isOpen && !isLoading && !internalLoading && !isSubmittingRef.current) {
         onClose();
       }
     };
@@ -57,16 +66,19 @@ export function ConfirmModal({
   }, [isOpen, onClose, isLoading, internalLoading]);
 
   const handleConfirmClick = async () => {
+    if (isSubmittingRef.current || isLoading || internalLoading) return;
+    isSubmittingRef.current = true;
+    setInternalLoading(true);
     try {
       const result = onConfirm();
       if (result instanceof Promise) {
-        setInternalLoading(true);
         await result;
       }
     } catch (err) {
       console.error("Confirmation action failed:", err);
     } finally {
       setInternalLoading(false);
+      isSubmittingRef.current = false;
       onClose();
     }
   };

@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, cleanUpLegacyDefaultTags } from "./db";
-import { flushSyncQueue, pullFromServer } from "./syncQueue";
+import { flushSyncQueue, pullFromServer, deduplicateDeleteLogs } from "./syncQueue";
 
 export type SyncState = "synced" | "syncing" | "pending" | "offline";
 
@@ -64,8 +64,8 @@ export function useSync({ accessToken }: UseSyncOptions = {}) {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Clean up any legacy default tags + sync on mount
-    cleanUpLegacyDefaultTags().then(() => {
+    // Clean up any legacy default tags, deduplicate delete logs + sync on mount
+    Promise.all([cleanUpLegacyDefaultTags(), deduplicateDeleteLogs()]).then(() => {
       triggerSync();
     });
 

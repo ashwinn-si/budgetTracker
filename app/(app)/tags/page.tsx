@@ -477,9 +477,10 @@ export default function TagsPage() {
         isOpen={!!tagToDelete}
         onClose={() => setTagToDelete(null)}
         onConfirm={async () => {
-          if (tagToDelete) {
-            await queueTagDeletion(tagToDelete.id);
-          }
+          if (!tagToDelete) return;
+          const t = tagToDelete;
+          setTagToDelete(null);
+          await queueTagDeletion(t.id);
         }}
         title={`Delete "${tagToDelete?.name}"?`}
         message={`Are you sure you want to delete "${tagToDelete?.name}"? This will untag associated expenses.`}

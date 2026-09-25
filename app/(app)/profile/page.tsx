@@ -46,7 +46,9 @@ import {
   clearAllLocalExpenses,
   recoverDeletedItem,
   permanentDeleteLog,
-  clearAllDeleteLogs
+  clearAllDeleteLogs,
+  deduplicateDeleteLogs,
+  mapServerDeleteLog,
 } from "@/lib/offline/syncQueue";
 
 export default function ProfilePage() {
@@ -500,6 +502,7 @@ export default function ProfilePage() {
     let isMounted = true;
     async function syncDeleteLogs() {
       try {
+        await deduplicateDeleteLogs();
         const storedToken =
           typeof window !== "undefined" ? sessionStorage.getItem("budget_access_token") : null;
         const headers: HeadersInit = { "Content-Type": "application/json" };
@@ -509,20 +512,9 @@ export default function ProfilePage() {
           const data = await res.json();
           if (isMounted && Array.isArray(data.deleteLogs)) {
             for (const sLog of data.deleteLogs) {
-              const logId = sLog._id || sLog.entityId || `del_${sLog.deletedAt}`;
-              await db.deleteLogs.put({
-                id: logId,
-                _id: sLog._id,
-                userId: sLog.userId,
-                entityType: sLog.entityType,
-                entityId: sLog.entityId,
-                title: sLog.title,
-                details: sLog.details || "",
-                data: sLog.data || {},
-                deletedAt: typeof sLog.deletedAt === "string" ? sLog.deletedAt : new Date(sLog.deletedAt).toISOString(),
-                syncStatus: "synced",
-              });
+              await db.deleteLogs.put(mapServerDeleteLog(sLog));
             }
+            await deduplicateDeleteLogs();
           }
         }
       } catch {
@@ -535,23 +527,37 @@ export default function ProfilePage() {
     };
   }, []);
 
-  const sortedDeleteLogs = useMemo(() => {
-    const list = [...rawDeleteLogs].sort(
+  // Guarantee UI uniqueness by entityType + entityId even if Dexie had transient duplicate rows
+  const uniqueDeleteLogs = useMemo(() => {
+    const seen = new Set<string>();
+    const unique: LocalDeleteLog[] = [];
+    const sorted = [...rawDeleteLogs].sort(
       (a, b) => new Date(b.deletedAt).getTime() - new Date(a.deletedAt).getTime()
     );
-    if (deleteLogFilter === "all") return list;
-    return list.filter((item) => item.entityType === deleteLogFilter);
-  }, [rawDeleteLogs, deleteLogFilter]);
+    for (const log of sorted) {
+      const key = log.entityId ? `${log.entityType}:${log.entityId}` : log.id;
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(log);
+      }
+    }
+    return unique;
+  }, [rawDeleteLogs]);
+
+  const sortedDeleteLogs = useMemo(() => {
+    if (deleteLogFilter === "all") return uniqueDeleteLogs;
+    return uniqueDeleteLogs.filter((item) => item.entityType === deleteLogFilter);
+  }, [uniqueDeleteLogs, deleteLogFilter]);
 
   const logCounts = useMemo(() => {
     return {
-      all: rawDeleteLogs.length,
-      expense: rawDeleteLogs.filter((l) => l.entityType === "expense").length,
-      saving: rawDeleteLogs.filter((l) => l.entityType === "saving").length,
-      tag: rawDeleteLogs.filter((l) => l.entityType === "tag").length,
-      trip: rawDeleteLogs.filter((l) => l.entityType === "trip").length,
+      all: uniqueDeleteLogs.length,
+      expense: uniqueDeleteLogs.filter((l) => l.entityType === "expense").length,
+      saving: uniqueDeleteLogs.filter((l) => l.entityType === "saving").length,
+      tag: uniqueDeleteLogs.filter((l) => l.entityType === "tag").length,
+      trip: uniqueDeleteLogs.filter((l) => l.entityType === "trip").length,
     };
-  }, [rawDeleteLogs]);
+  }, [uniqueDeleteLogs]);
 
   const formatTimeAgo = (dateStr: string) => {
     try {
@@ -598,14 +604,14 @@ export default function ProfilePage() {
 
   const confirmPermanentDelete = async () => {
     if (!logToDeletePermanently) return;
+    const target = logToDeletePermanently;
+    setLogToDeletePermanently(null);
     try {
-      await permanentDeleteLog(logToDeletePermanently.id);
+      await permanentDeleteLog(target.id);
       toast.success("Record deleted permanently");
     } catch (err) {
       console.error(err);
       toast.error("Failed to delete record");
-    } finally {
-      setLogToDeletePermanently(null);
     }
   };
 

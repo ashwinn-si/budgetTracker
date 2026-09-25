@@ -105,11 +105,11 @@ export default function SavingsPage() {
   const confirmDeleteSaving = async () => {
     if (!savingToDelete) return;
     const item = savingToDelete;
+    setSavingToDelete(null);
     await queueSavingDeletion(item.clientId);
     if (item.linkedExpenseId) {
       await queueExpenseDeletion(item.linkedExpenseId);
     }
-    setSavingToDelete(null);
   };
 
   const handleEditRecord = (item: LocalSaving) => {

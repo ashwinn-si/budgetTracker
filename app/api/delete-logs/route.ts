@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import { DeleteLog } from "@/models/DeleteLog";
 import { getCurrentUser } from "@/lib/auth";
@@ -47,9 +48,18 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Log ID is required" }, { status: 400 });
     }
 
-    await DeleteLog.deleteOne({
+    const conditions: Record<string, unknown>[] = [{ entityId: id }];
+    if (id.startsWith("del_")) {
+      const stripped = id.replace(/^del_/, "");
+      conditions.push({ entityId: stripped });
+    }
+    if (mongoose.Types.ObjectId.isValid(id) && /^[a-f\d]{24}$/i.test(id)) {
+      conditions.push({ _id: new mongoose.Types.ObjectId(id) });
+    }
+
+    await DeleteLog.deleteMany({
       userId,
-      $or: [{ _id: id }, { entityId: id }],
+      $or: conditions,
     });
 
     return NextResponse.json({ success: true, message: "Delete log removed" });

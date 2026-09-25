@@ -263,7 +263,9 @@ export async function POST(req: NextRequest) {
         expenseCount += 1;
       }
 
-      await DeleteLog.deleteOne({ _id: log._id });
+      const delConditions: Record<string, unknown>[] = [{ _id: log._id }];
+      if (log.entityId) delConditions.push({ entityId: log.entityId });
+      await DeleteLog.deleteMany({ userId, $or: delConditions });
 
       return NextResponse.json({
         success: true,
@@ -275,7 +277,9 @@ export async function POST(req: NextRequest) {
     }
 
     // Remove the delete log entry once recovered
-    await DeleteLog.deleteOne({ _id: log._id });
+    const delConditions: Record<string, unknown>[] = [{ _id: log._id }];
+    if (log.entityId) delConditions.push({ entityId: log.entityId });
+    await DeleteLog.deleteMany({ userId, $or: delConditions });
 
     return NextResponse.json({
       success: true,
