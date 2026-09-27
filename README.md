@@ -9,7 +9,7 @@ A personal budget tracking web app built with Next.js, MongoDB, and Vercel.
 - **Smart Expense Management**: Expenses sorted in descending order of addition (recent first), with dynamic header total calculations that update instantly based on active filters.
 - **Public Dashboard Sharing**: Generate a secure, public link to share read-only monthly or full trip finances. Includes day/week/month spending breakdowns (with interactive Recharts bar charts and data tables), category distributions, and paginated, scrollable transaction lists with sticky date headers.
 - **Authentication**: Google OAuth and Email/Password with silent auto-login.
-- **Exports & Google Sheets Sync**: Export data to Excel or sync directly to your personal Google Sheets. Features in-place updates to the same sheet without creating duplicates, an option to delete the existing sheet and resync fresh from start, and one-click sheet link and sheet ID copying.
+- **Exports & Google Sheets Sync**: Export data to Excel or sync directly to your personal Google Sheets. Every trip gets its own spreadsheet ("Budget Tracker - <trip name>"), created on its first sync and updated in place after that; a per-trip "Delete & Resync" that rebuilds the sheet without changing its link; and one-click sheet link and sheet ID copying.
 - **Modern UI Patterns**: Mobile-optimized bottom sheets for filters, global toast notifications via `react-hot-toast`, and a sleek light-green glassmorphism aesthetic with full light/dark mode support.
 
 ## Tech Stack
