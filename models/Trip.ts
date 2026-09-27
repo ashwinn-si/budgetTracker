@@ -15,6 +15,9 @@ export interface ITrip extends Document {
   isSharingEnabled: boolean;
   shareId?: string;
   shareMode?: "monthly" | "full";
+  // This trip's own Google Sheet ("Budget Tracker - <name>"), created on its first sync.
+  sheetsSpreadsheetId?: string | null;
+  sheetsLastSyncedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,6 +42,8 @@ const TripSchema = new Schema<ITrip>(
     isSharingEnabled: { type: Boolean, default: false },
     shareId: { type: String, unique: true, sparse: true },
     shareMode: { type: String, enum: ["monthly", "full"] },
+    sheetsSpreadsheetId: { type: String, default: null },
+    sheetsLastSyncedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

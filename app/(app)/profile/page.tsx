@@ -51,6 +51,16 @@ import {
   mapServerDeleteLog,
 } from "@/lib/offline/syncQueue";
 
+type TripSheetInfo = {
+  tripId: string;
+  name: string;
+  emoji: string;
+  title: string;
+  spreadsheetId: string;
+  url: string;
+  lastSyncedAt: string | null;
+};
+
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth();
   const { activeTripId, activeTrip, trips } = useTrip();
@@ -68,24 +78,16 @@ export default function ProfilePage() {
     }
   }, []);
 
-  // Sheets sync state
+  // Sheets sync state: every trip syncs to its own spreadsheet ("Budget Tracker - <trip>")
   const [isSheetsSyncing, setIsSheetsSyncing] = useState(false);
   const [sheetsMessage, setSheetsMessage] = useState<string | null>(null);
-  const [sheetsUrl, setSheetsUrl] = useState<string | null>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("budget_sheets_url") || null;
-    }
-    return null;
-  });
+  const [tripSheets, setTripSheets] = useState<TripSheetInfo[]>([]);
+  const [sheetsRefreshKey, setSheetsRefreshKey] = useState(0);
 
-  const activeSheetsUrl = useMemo(() => {
-    if (user?.sheetsSpreadsheetId) {
-      return `https://docs.google.com/spreadsheets/d/${user.sheetsSpreadsheetId}`;
-    }
-    return sheetsUrl;
-  }, [user?.sheetsSpreadsheetId, sheetsUrl]);
+  const activeTripSheet = tripSheets.find((s) => s.tripId === activeTripId) || null;
+  const activeSheetsUrl = activeTripSheet?.url ?? null;
 
-  // Keep sheetsUrl and AuthUser synced with latest database info
+  // Load every trip's sheet link from the server; reloaded after each sync or unlink
   useEffect(() => {
     let isMounted = true;
     async function loadSheetsInfo() {
@@ -93,18 +95,13 @@ export default function ProfilePage() {
         const res = await fetch("/api/export/sheets");
         if (!res.ok) return;
         const data = await res.json();
-        if (isMounted && data.url) {
-          setSheetsUrl(data.url);
-          if (typeof window !== "undefined") {
-            localStorage.setItem("budget_sheets_url", data.url);
-          }
-          if (updateUser && data.spreadsheetId) {
-            updateUser({
-              sheetsLinked: Boolean(data.linked),
-              sheetsSpreadsheetId: data.spreadsheetId,
-              sheetsLastSyncedAt: data.lastSyncedAt,
-            });
-          }
+        if (!isMounted) return;
+        setTripSheets(Array.isArray(data.sheets) ? data.sheets : []);
+        if (updateUser) {
+          updateUser({
+            sheetsLinked: Boolean(data.linked),
+            sheetsLastSyncedAt: data.lastSyncedAt,
+          });
         }
       } catch {
         // Ignore offline / fetch errors
@@ -114,7 +111,7 @@ export default function ProfilePage() {
     return () => {
       isMounted = false;
     };
-  }, [updateUser]);
+  }, [updateUser, sheetsRefreshKey]);
 
   // Password reset state
   const [isResetRequested, setIsResetRequested] = useState(false);
@@ -138,7 +135,7 @@ export default function ProfilePage() {
   };
 
   const handleCopySpreadsheetId = async () => {
-    const id = user?.sheetsSpreadsheetId || (activeSheetsUrl ? activeSheetsUrl.split("/d/")[1]?.split("/")[0] : null);
+    const id = activeTripSheet?.spreadsheetId;
     if (!id) return;
     try {
       await navigator.clipboard.writeText(id);
@@ -162,17 +159,7 @@ export default function ProfilePage() {
       });
       const data = await res.json();
       if (res.ok && data.url) {
-        setSheetsUrl(data.url);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("budget_sheets_url", data.url);
-        }
-        if (updateUser && data.spreadsheetId) {
-          updateUser({
-            sheetsLinked: true,
-            sheetsSpreadsheetId: data.spreadsheetId,
-            sheetsLastSyncedAt: data.lastSyncedAt,
-          });
-        }
+        setSheetsRefreshKey((k) => k + 1);
         toast.success(data.message || "Spreadsheet synced successfully!", { id: "sheets-sync" });
         setSheetsMessage(data.message || "Spreadsheet synced successfully!");
       } else {
@@ -190,7 +177,7 @@ export default function ProfilePage() {
   const handleDeleteAndSyncFresh = async () => {
     setIsResetSyncing(true);
     setSheetsMessage(null);
-    toast.loading(`Starting a fresh sync for ${activeTrip.name}…`, { id: "sheets-fresh-sync" });
+    toast.loading(`Rebuilding the ${activeTrip.name} sheet…`, { id: "sheets-fresh-sync" });
     try {
       const res = await fetch("/api/export/sheets", {
         method: "POST",
@@ -199,22 +186,12 @@ export default function ProfilePage() {
       });
       const data = await res.json();
       if (res.ok && data.url) {
-        setSheetsUrl(data.url);
-        if (typeof window !== "undefined") {
-          localStorage.setItem("budget_sheets_url", data.url);
-        }
-        if (updateUser && data.spreadsheetId) {
-          updateUser({
-            sheetsLinked: true,
-            sheetsSpreadsheetId: data.spreadsheetId,
-            sheetsLastSyncedAt: data.lastSyncedAt,
-          });
-        }
-        toast.success(data.message || "Fresh Google Sheet created and synced!", { id: "sheets-fresh-sync" });
-        setSheetsMessage(data.message || "Fresh Google Sheet created and synced!");
+        setSheetsRefreshKey((k) => k + 1);
+        toast.success(data.message || `Rebuilt the ${activeTrip.name} sheet.`, { id: "sheets-fresh-sync" });
+        setSheetsMessage(data.message || `Rebuilt the ${activeTrip.name} sheet.`);
         setIsDeleteAndSyncModalOpen(false);
       } else {
-        toast.error(data.error || "Failed to reset and resync Google Sheet.", { id: "sheets-fresh-sync" });
+        toast.error(data.error || `Failed to rebuild the ${activeTrip.name} sheet.`, { id: "sheets-fresh-sync" });
         setSheetsMessage(data.error || "Please log in with Google to sync to your Drive Sheet.");
       }
     } catch {
@@ -234,10 +211,7 @@ export default function ProfilePage() {
       const res = await fetch("/api/export/sheets", { method: "DELETE" });
       const data = await res.json();
       if (res.ok) {
-        setSheetsUrl(null);
-        if (typeof window !== "undefined") {
-          localStorage.removeItem("budget_sheets_url");
-        }
+        setTripSheets([]);
         if (updateUser) {
           updateUser({
             sheetsLinked: false,
@@ -245,7 +219,7 @@ export default function ProfilePage() {
             sheetsLastSyncedAt: undefined,
           });
         }
-        toast.success("Google Sheet unlinked! You can now start fresh.");
+        toast.success(data.message || "Google Sheets unlinked! You can now start fresh.");
         setSheetsMessage(null);
         setIsUnlinkModalOpen(false);
       } else {
@@ -913,7 +887,7 @@ export default function ProfilePage() {
                     Google Sheets Sync
                   </h3>
                   <p className="text-xs text-[var(--text-muted)]">
-                    Sync your ledger and category summary to Google Drive
+                    Each trip syncs to its own sheet in Google Drive
                   </p>
                 </div>
               </div>
@@ -958,19 +932,19 @@ export default function ProfilePage() {
                 >
                   Sync Changes
                 </Button>
-                {(activeSheetsUrl || user?.sheetsSpreadsheetId) && (
+                {activeTripSheet && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setIsDeleteAndSyncModalOpen(true)}
                     className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 border-amber-500/20"
                     icon={<RotateCcw className="w-3.5 h-3.5" />}
-                    title="Delete existing sheet and create fresh"
+                    title="Rebuild this trip's sheet from scratch"
                   >
                     Delete & Resync
                   </Button>
                 )}
-                {(activeSheetsUrl || user?.sheetsSpreadsheetId) && (
+                {(tripSheets.length > 0 || user?.sheetsSpreadsheetId) && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -989,28 +963,30 @@ export default function ProfilePage() {
                 <span className="text-[var(--text-secondary)]">Integration:</span>
                 <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-semibold">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  {user?.sheetsLinked || activeSheetsUrl ? "Connected" : "Ready to connect"}
+                  {user?.sheetsLinked || tripSheets.length > 0 ? "Connected" : "Ready to connect"}
                 </span>
               </div>
 
-              {user?.sheetsLastSyncedAt && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-[var(--text-secondary)]">Last Synced:</span>
-                  <span className="text-[var(--text-muted)]">
-                    {new Date(user.sheetsLastSyncedAt).toLocaleString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
+              {activeTripSheet && (
+                <div className="flex items-center justify-between gap-2 text-xs">
+                  <span className="text-[var(--text-secondary)] truncate">Last Synced ({activeTrip.name}):</span>
+                  <span className="text-[var(--text-muted)] shrink-0">
+                    {activeTripSheet.lastSyncedAt
+                      ? new Date(activeTripSheet.lastSyncedAt).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })
+                      : "Never"}
                   </span>
                 </div>
               )}
 
               {activeSheetsUrl ? (
                 <div className="pt-2.5 border-t border-black/5 dark:border-white/5 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-[var(--text-secondary)] font-medium">Spreadsheet Link:</span>
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-[var(--text-secondary)] font-medium truncate">{activeTripSheet?.title}</span>
                     <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium uppercase tracking-wider">
                       Live Google Drive
                     </span>
@@ -1065,12 +1041,12 @@ export default function ProfilePage() {
                   </div>
 
                   {/* Sheet ID info & copy */}
-                  {(user?.sheetsSpreadsheetId || activeSheetsUrl) && (
+                  {activeTripSheet && (
                     <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] text-xs">
                       <span className="text-[var(--text-muted)] text-[11px]">Sheet ID:</span>
                       <div className="flex items-center gap-1.5 font-mono text-[11px] text-[var(--text-secondary)]">
                         <span className="max-w-[180px] sm:max-w-none truncate">
-                          {user?.sheetsSpreadsheetId || activeSheetsUrl.split("/d/")[1]?.split("/")[0]}
+                          {activeTripSheet.spreadsheetId}
                         </span>
                         <button
                           type="button"
@@ -1092,8 +1068,38 @@ export default function ProfilePage() {
                 <div className="pt-2 border-t border-black/5 dark:border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-[var(--text-muted)]">
                   <span>Spreadsheet Link:</span>
                   <div className="flex items-center gap-2">
-                    <span>Not exported yet. Click &ldquo;Sync Changes&rdquo; to create your Google Sheet.</span>
+                    <span>
+                      No sheet for {activeTrip.name} yet. Click &ldquo;Sync Changes&rdquo; to create &ldquo;Budget Tracker - {activeTrip.name}&rdquo;.
+                    </span>
                   </div>
+                </div>
+              )}
+
+              {tripSheets.length > 0 && (
+                <div className="pt-2.5 border-t border-black/5 dark:border-white/5 space-y-1.5">
+                  <span className="text-xs text-[var(--text-secondary)] font-medium">Trip sheets</span>
+                  {tripSheets.map((sheet) => (
+                    <div
+                      key={sheet.tripId}
+                      className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-black/[0.03] dark:bg-white/[0.03] text-xs"
+                    >
+                      <div className="min-w-0 flex items-center gap-2">
+                        <span className="shrink-0">{sheet.emoji || (sheet.tripId === GENERAL_TRIP_ID ? "💼" : "✈️")}</span>
+                        <span className="truncate text-[var(--text-primary)]" title={sheet.title}>
+                          {sheet.name}
+                        </span>
+                      </div>
+                      <a
+                        href={sheet.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 shrink-0 text-emerald-600 dark:text-emerald-400 font-semibold hover:underline"
+                      >
+                        <span>Open</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -1655,8 +1661,8 @@ export default function ProfilePage() {
         onClose={() => setIsUnlinkModalOpen(false)}
         onConfirm={handleUnlinkGoogleSheets}
         isLoading={isUnlinkingSheets}
-        title="Unlink & Reset Google Sheet?"
-        message="Are you sure you want to unlink and reset your Google Spreadsheet? This removes the spreadsheet link and deletes it from Google Drive so you can start completely fresh on your next sync."
+        title="Unlink & Reset Google Sheets?"
+        message="This unlinks Google Sheets and moves every trip's sheet to your Google Drive trash (recoverable for 30 days). Your next sync creates fresh sheets. Continue?"
         confirmText="Unlink & Reset"
         variant="danger"
       />
@@ -1667,9 +1673,9 @@ export default function ProfilePage() {
         onClose={() => setIsDeleteAndSyncModalOpen(false)}
         onConfirm={handleDeleteAndSyncFresh}
         isLoading={isResetSyncing}
-        title="Delete Sheet & Resync Fresh?"
-        message="This will delete your existing Google Sheet from Google Drive and generate a clean, brand-new spreadsheet with all your transactions and category breakdowns. Continue?"
-        confirmText="Delete & Resync Fresh"
+        title={`Rebuild ${activeTrip.name} sheet?`}
+        message={`This clears "Budget Tracker - ${activeTrip.name}" and rebuilds it with all of this trip's transactions and category breakdowns. The link stays the same and other trips' sheets are untouched. Continue?`}
+        confirmText="Delete & Resync"
         variant="warning"
       />
     </div>

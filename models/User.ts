@@ -8,7 +8,10 @@ export interface IUser extends Document {
   googleAccessToken?: string | null;
   googleRefreshToken?: string | null;
   sheetsLinked: boolean;
+  // Legacy: the single combined spreadsheet used before each trip got its own sheet (Trip.sheetsSpreadsheetId).
+  // Only migrate-27-09 and Unlink read it; sync never writes it.
   sheetsSpreadsheetId?: string | null;
+  // Last time any trip was synced to Google Sheets.
   sheetsLastSyncedAt?: Date | null;
   currency?: string;
   isSharingEnabled?: boolean;

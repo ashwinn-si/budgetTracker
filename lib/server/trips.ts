@@ -2,6 +2,7 @@ import { Trip, ITrip } from "@/models/Trip";
 import { Expense } from "@/models/Expense";
 import { Tag } from "@/models/Tag";
 import { DeleteLog } from "@/models/DeleteLog";
+import { User } from "@/models/User";
 import { GENERAL_TRIP_ID, generateTripId, canMirrorInto, TripLike } from "@/lib/trips";
 
 export interface TripOpResult {
@@ -102,6 +103,7 @@ export async function updateTrip(
   const trip = await Trip.findOne({ userId, tripId });
   if (!trip) return { error: "Trip not found", status: 404 };
 
+  const previousName = trip.name;
   if (typeof updates.name === "string" && updates.name.trim()) trip.name = updates.name.trim();
   if (typeof updates.emoji === "string") trip.emoji = updates.emoji;
   if (typeof updates.colorKey === "string") trip.colorKey = updates.colorKey;
@@ -127,6 +129,16 @@ export async function updateTrip(
   }
 
   await trip.save();
+
+  if (trip.sheetsSpreadsheetId && trip.name !== previousName) {
+    // Keep "Budget Tracker - <name>" in step with the trip; the next sync also corrects it if this fails.
+    const user = await User.findById(userId);
+    if (user) {
+      const { renameSpreadsheet, tripSpreadsheetTitle } = await import("@/lib/server/googleSheets");
+      await renameSpreadsheet(user, trip.sheetsSpreadsheetId, tripSpreadsheetTitle(trip.name));
+    }
+  }
+
   return { trip };
 }
 
@@ -167,6 +179,16 @@ export async function deleteTripCascade(userId: string, tripId: string): Promise
   await Tag.deleteMany({ userId, tripId });
   await Trip.deleteOne({ _id: trip._id });
   await Trip.updateMany({ userId }, { $pull: { mirrorToTripIds: tripId } });
+
+  if (trip.sheetsSpreadsheetId) {
+    // Recoverable from Drive trash for 30 days; a recovered trip gets a new sheet on its next sync.
+    const user = await User.findById(userId);
+    if (user) {
+      // Loaded lazily so trip routes don't pay the googleapis import cost unless a sheet exists.
+      const { trashSpreadsheet } = await import("@/lib/server/googleSheets");
+      await trashSpreadsheet(user, trip.sheetsSpreadsheetId);
+    }
+  }
 
   return { success: true };
 }
