@@ -162,11 +162,16 @@ async function buildSharePayload(params: {
     const rawTags: any[] = isOwn ? ((exp.tagIds as any[]) || []) : [];
     const tags = rawTags
       .filter((t) => typeof t === "object" && t)
-      .map((t) => ({ name: t.name as string, colorKey: t.colorKey as string }));
+      .map((t) => ({
+        tagId: t._id?.toString?.() || String(t._id),
+        name: t.name as string,
+        colorKey: t.colorKey as string,
+      }));
     const sourceTrip = !isOwn ? tripsById.get(expTripId) : null;
 
     return {
       date: exp.date,
+      createdAt: exp.createdAt || exp.date,
       note: exp.note || "",
       amount: toAmount(exp.amount),
       tags,

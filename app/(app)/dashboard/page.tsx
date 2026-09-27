@@ -240,6 +240,16 @@ function DashboardContent() {
       .sort((a, b) => b.total - a.total);
   }, [currentExpenses, tagMap, totalSpend, activeTripId, trips]);
 
+  // Expenses page link filtered to one category (and to the month, when viewing a month)
+  const getCategoryExpensesHref = (tagId: string) => {
+    const params = new URLSearchParams({ tag: tagId });
+    if (periodParam === "month") {
+      const start = dateRanges.start;
+      params.set("month", `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, "0")}`);
+    }
+    return `/expenses?${params.toString()}`;
+  };
+
   // Mirrored (cross-trip) spend included in the current totals, for the secondary totals line
   const mirroredSummary = useMemo(() => {
     const mirroredExpenses = currentExpenses.filter((exp) => (exp.tripId || GENERAL_TRIP_ID) !== activeTripId);
@@ -639,7 +649,11 @@ function DashboardContent() {
           <div className="overflow-y-auto max-h-[calc(100dvh-480px)] pr-2 -mr-2 custom-scrollbar">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 pb-4">
               {categoryBreakdown.map((cat) => (
-                <div key={cat.tagId} className="space-y-1.5">
+                <Link
+                  key={cat.tagId}
+                  href={getCategoryExpensesHref(cat.tagId)}
+                  className="block space-y-1.5 -mx-2 px-2 py-1.5 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                >
                   <div className="flex items-center justify-between text-xs sm:text-sm">
                     <div className="flex items-center gap-2">
                       <span
@@ -668,7 +682,7 @@ function DashboardContent() {
                       }}
                     />
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

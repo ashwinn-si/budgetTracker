@@ -168,9 +168,11 @@ export default function ExpensesPage() {
 
         const matchesTag =
           selectedTag === "all" ||
-          (selectedTag.startsWith("trip:")
-            ? (exp.tripId || GENERAL_TRIP_ID) === selectedTag.slice(5)
-            : exp.tagIds && exp.tagIds.includes(selectedTag));
+          (selectedTag === "uncategorized"
+            ? (exp.tripId || GENERAL_TRIP_ID) === activeTripId && !exp.tagIds?.length
+            : selectedTag.startsWith("trip:")
+              ? (exp.tripId || GENERAL_TRIP_ID) === selectedTag.slice(5)
+              : exp.tagIds && exp.tagIds.includes(selectedTag));
 
         const matchesMonth =
           selectedMonth === "all" ||
@@ -193,7 +195,7 @@ export default function ExpensesPage() {
         if (dateDiff !== 0) return dateDiff;
         return (b.clientId || "").localeCompare(a.clientId || "");
       });
-  }, [allExpenses, searchTerm, selectedTag, selectedMonth]);
+  }, [allExpenses, searchTerm, selectedTag, selectedMonth, activeTripId]);
 
   const filteredTotalAmount = useMemo(() => {
     return filteredAndSortedExpenses.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
@@ -296,6 +298,7 @@ export default function ExpensesPage() {
               options={[
                 { value: "all", label: "All Tags" },
                 ...allTags.map(tag => ({ value: tag._id, label: tag.name })),
+                { value: "uncategorized", label: "Uncategorized" },
                 ...tripTagOptions,
               ]}
               icon={<Filter className="w-4 h-4" />}

@@ -166,7 +166,7 @@ export function TripSwitcher({ variant, className = "" }: TripSwitcherProps) {
     <div
       role="listbox"
       aria-label="Switch trip"
-      className={`absolute z-50 glass-strong backdrop-blur-2xl border border-white/60 dark:border-white/10 rounded-2xl shadow-2xl p-2 ${
+      className={`absolute z-50 bg-[var(--bg-cream)] border border-black/[0.06] dark:border-white/10 rounded-2xl shadow-2xl p-2 ${
         variant === "compact" ? "left-full top-0 ml-3 w-64" : "left-0 right-0 top-full mt-2"
       }`}
     >

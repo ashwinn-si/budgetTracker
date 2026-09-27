@@ -1,9 +1,9 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import { Receipt, ChevronLeft, ChevronRight } from "lucide-react";
+import { Receipt, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { RecentExpense } from "./types";
+import { CategoryBreakdown, RecentExpense } from "./types";
 import { ExpenseRow } from "./ExpenseRow";
 import { format, parseISO } from "date-fns";
 
@@ -16,7 +16,14 @@ export interface SharedExpensesListProps {
   formatExpenseDate: (val: string) => string;
   className?: string;
   resetKey?: string | number;
+  selectedCategory?: CategoryBreakdown | null;
+  onClearCategory?: () => void;
 }
+
+const matchesCategory = (exp: RecentExpense, category: CategoryBreakdown) =>
+  category.isMirrored
+    ? exp.sourceTrip?.tripId === category.sourceTripId
+    : !exp.sourceTrip && exp.tags.some((t) => t.tagId === category.tagId);
 
 export function SharedExpensesList({
   expenses,
@@ -27,6 +34,8 @@ export function SharedExpensesList({
   formatExpenseDate,
   className,
   resetKey,
+  selectedCategory,
+  onClearCategory,
 }: SharedExpensesListProps) {
   const [currentPage, setCurrentPage] = useState(1);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -36,14 +45,26 @@ export function SharedExpensesList({
     setCurrentPage(1);
   }, [resetKey]);
 
-  const totalExpenseItems = expenses.length;
+  // With a category selected, show only its expenses, most recently added first.
+  const visibleExpenses = useMemo(() => {
+    if (!selectedCategory) return expenses;
+    return expenses
+      .filter((exp) => matchesCategory(exp, selectedCategory))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [expenses, selectedCategory]);
+  const categoryTotal = useMemo(
+    () => visibleExpenses.reduce((sum, exp) => sum + exp.amount, 0),
+    [visibleExpenses]
+  );
+
+  const totalExpenseItems = visibleExpenses.length;
   const totalPages = Math.ceil(totalExpenseItems / ITEMS_PER_PAGE) || 1;
   const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
   const startIndex = (safeCurrentPage - 1) * ITEMS_PER_PAGE;
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const paginatedExpenses = useMemo(() => {
-    return expenses.slice(startIndex, endIndex);
-  }, [expenses, startIndex, endIndex]);
+    return visibleExpenses.slice(startIndex, endIndex);
+  }, [visibleExpenses, startIndex, endIndex]);
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage > totalPages || newPage === safeCurrentPage) return;
@@ -103,6 +124,38 @@ export function SharedExpensesList({
         )}
       </div>
 
+      {selectedCategory && (
+        <div
+          className="flex items-center justify-between gap-3 mb-4 px-3 py-2 rounded-2xl border min-w-0"
+          style={{
+            backgroundColor: `${selectedCategory.colorKey}14`,
+            borderColor: `${selectedCategory.colorKey}40`,
+          }}
+        >
+          <div className="flex items-center gap-2 min-w-0 text-sm">
+            <span
+              className="w-2.5 h-2.5 rounded-full shrink-0"
+              style={{ backgroundColor: selectedCategory.colorKey }}
+            />
+            <span className="font-semibold text-[var(--text-primary)] truncate">
+              {selectedCategory.tagName}
+            </span>
+            <span className="text-[var(--text-muted)] shrink-0">
+              · {formatAmount(categoryTotal)}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClearCategory}
+            aria-label="Clear category filter"
+            className="shrink-0 flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-lg text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+            Clear
+          </button>
+        </div>
+      )}
+
       {totalExpenseItems > 0 ? (
         <>
           {/* Scrollable Rows */}
@@ -110,7 +163,7 @@ export function SharedExpensesList({
             ref={scrollContainerRef}
             className="max-h-[440px] sm:max-h-[520px] overflow-y-auto custom-scrollbar pr-2 -mr-2"
           >
-            {isFullMode ? (
+            {isFullMode && !selectedCategory ? (
               <div className="space-y-5">
                 {groupExpensesByDay(paginatedExpenses).map((group) => (
                   <div key={group.dateKey}>
@@ -213,7 +266,9 @@ export function SharedExpensesList({
         </>
       ) : (
         <div className="py-12 text-center text-[var(--text-muted)]">
-          {isFullMode
+          {selectedCategory
+            ? "No expenses in this category."
+            : isFullMode
             ? "No expenses recorded for this trip."
             : "No expenses recorded for this month."}
         </div>

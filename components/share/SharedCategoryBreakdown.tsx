@@ -16,6 +16,8 @@ export interface SharedCategoryBreakdownProps {
   onNextMonth: () => void;
   formatAmount: (val: number) => string;
   className?: string;
+  selectedCategoryId?: string | null;
+  onSelectCategory?: (category: CategoryBreakdown) => void;
 }
 
 export function SharedCategoryBreakdown({
@@ -28,6 +30,8 @@ export function SharedCategoryBreakdown({
   onNextMonth,
   formatAmount,
   className,
+  selectedCategoryId,
+  onSelectCategory,
 }: SharedCategoryBreakdownProps) {
   const isCurrentMonth =
     currentDate.getMonth() === new Date().getMonth() &&
@@ -79,9 +83,16 @@ export function SharedCategoryBreakdown({
       {categories.length > 0 ? (
         <div className="space-y-4">
           {categories.map((cat) => (
-            <div
+            <button
               key={cat.tagId}
-              className="group flex items-center gap-4 p-3 rounded-2xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+              type="button"
+              onClick={() => onSelectCategory?.(cat)}
+              aria-pressed={selectedCategoryId === cat.tagId}
+              className={`group w-full text-left flex items-center gap-4 p-3 rounded-2xl border transition-colors cursor-pointer ${
+                selectedCategoryId === cat.tagId
+                  ? "bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10"
+                  : "border-transparent hover:bg-black/5 dark:hover:bg-white/5"
+              }`}
             >
               <div
                 className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 shadow-sm"
@@ -126,7 +137,7 @@ export function SharedCategoryBreakdown({
                   </span>
                 </div>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       ) : (

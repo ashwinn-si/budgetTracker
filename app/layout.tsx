@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     process.env.NEXT_PUBLIC_APP_URL || "https://money.ashwinsi.in"
   ),
   title: {
-    default: "BudgetFlow — Modern Glassmorphism Budget Tracker",
+    default: "BudgetFlow — Modern Budget Tracker",
     template: "%s | BudgetFlow",
   },
   description:
@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: "/",
     siteName: "BudgetFlow",
-    title: "BudgetFlow — Modern Glassmorphism Budget Tracker",
+    title: "BudgetFlow — Modern Budget Tracker",
     description:
       "Track your expenses offline-first with beautiful light-green glassmorphism, instant sync, and Google Sheets export.",
     images: [
@@ -77,7 +77,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "BudgetFlow — Modern Glassmorphism Budget Tracker",
+    title: "BudgetFlow — Modern Budget Tracker",
     description:
       "Track your expenses offline-first with beautiful light-green glassmorphism.",
     images: ["/logo.png"],

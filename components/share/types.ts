@@ -10,6 +10,7 @@ export interface CategoryBreakdown {
 }
 
 export interface RecentExpenseTag {
+  tagId: string;
   name: string;
   colorKey: string;
 }
@@ -23,6 +24,7 @@ export interface RecentExpenseSourceTrip {
 
 export interface RecentExpense {
   date: string;
+  createdAt: string;
   note: string;
   amount: number;
   tags: RecentExpenseTag[];

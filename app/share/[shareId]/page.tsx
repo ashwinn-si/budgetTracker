@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, use, Suspense } from "react";
+import React, { useEffect, useRef, useState, use, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -13,7 +13,7 @@ import { useTheme } from "@/context/ThemeContext";
 import { Loader } from "@/components/ui/Loader";
 import { GENERAL_TRIP_ID } from "@/lib/trips";
 
-import { SharedData } from "@/components/share/types";
+import { CategoryBreakdown, SharedData } from "@/components/share/types";
 import { TripSwitcher } from "@/components/share/TripSwitcher";
 import { SharedMetricCards } from "@/components/share/SharedMetricCards";
 import { SharedSpendingBreakdown } from "@/components/share/SharedSpendingBreakdown";
@@ -32,6 +32,9 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
   const [selectedTripId, setSelectedTripId] = useState<string | null>(() =>
     searchParams.get("tripId")
   );
+
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const expensesListRef = useRef<HTMLDivElement>(null);
 
   const { theme, toggleTheme } = useTheme();
 
@@ -69,10 +72,26 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
   const handleSelectTrip = (tripId: string) => {
     if (tripId === selectedTripId) return;
     setCurrentDate(new Date());
+    setSelectedCategoryId(null);
     setSelectedTripId(tripId);
     const query = new URLSearchParams(searchParams.toString());
     query.set("tripId", tripId);
     router.replace(`/share/${shareId}?${query.toString()}`);
+  };
+
+  const changeMonth = (delta: number) => {
+    setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + delta, 1));
+    setSelectedCategoryId(null);
+  };
+
+  const handleSelectCategory = (category: CategoryBreakdown) => {
+    const next = category.tagId === selectedCategoryId ? null : category.tagId;
+    setSelectedCategoryId(next);
+    if (next) {
+      requestAnimationFrame(() =>
+        expensesListRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      );
+    }
   };
 
   if (loading) {
@@ -106,6 +125,9 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
   };
   const formatExpenseDate = (val: string) =>
     new Date(val).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+
+  const selectedCategory =
+    data.categoryBreakdown.find((c) => c.tagId === selectedCategoryId) || null;
 
   const isGeneral = data.trip.tripId === GENERAL_TRIP_ID;
   const isFullMode = data.mode === "full";
@@ -217,27 +239,29 @@ function SharedDashboardContent({ shareId }: { shareId: string }) {
           month={data.month}
           year={data.year}
           currentDate={currentDate}
-          onPrevMonth={() =>
-            setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
-          }
-          onNextMonth={() =>
-            setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
-          }
+          onPrevMonth={() => changeMonth(-1)}
+          onNextMonth={() => changeMonth(1)}
           formatAmount={formatAmount}
           className={transitionClass}
+          selectedCategoryId={selectedCategory?.tagId ?? null}
+          onSelectCategory={handleSelectCategory}
         />
 
-        {/* Recent / All Expenses Card */}
-        <SharedExpensesList
-          expenses={data.recentExpenses}
-          isFullMode={isFullMode}
-          month={data.month}
-          year={data.year}
-          formatAmount={formatAmount}
-          formatExpenseDate={formatExpenseDate}
-          className={transitionClass}
-          resetKey={`${shareId}-${currentDate.toISOString()}-${selectedTripId}`}
-        />
+        {/* Recent / All Expenses Card (filtered to the selected category, if any) */}
+        <div ref={expensesListRef} className="scroll-mt-4">
+          <SharedExpensesList
+            expenses={data.recentExpenses}
+            isFullMode={isFullMode}
+            month={data.month}
+            year={data.year}
+            formatAmount={formatAmount}
+            formatExpenseDate={formatExpenseDate}
+            className={transitionClass}
+            resetKey={`${shareId}-${currentDate.toISOString()}-${selectedTripId}-${selectedCategory?.tagId ?? "all"}`}
+            selectedCategory={selectedCategory}
+            onClearCategory={() => setSelectedCategoryId(null)}
+          />
+        </div>
       </main>
     </div>
   );
