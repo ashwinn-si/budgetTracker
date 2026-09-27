@@ -65,7 +65,7 @@ export const metadata: Metadata = {
     siteName: "BudgetFlow",
     title: "BudgetFlow — Modern Budget Tracker",
     description:
-      "Track your expenses offline-first with beautiful light-green glassmorphism, instant sync, and Google Sheets export.",
+      "Track your expenses offline-first with instant sync, spend insights, and Google Sheets export.",
     images: [
       {
         url: "/logo.png",
@@ -79,7 +79,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "BudgetFlow — Modern Budget Tracker",
     description:
-      "Track your expenses offline-first with beautiful light-green glassmorphism.",
+      "Track your expenses offline-first with instant sync and spend insights.",
     images: ["/logo.png"],
   },
 };
