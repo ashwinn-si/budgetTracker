@@ -11,7 +11,10 @@
     "seed": "npx tsx --env-file=.env.local scripts/seed.ts",
     "migrate-22-09": "npx tsx --env-file=.env.local scripts/migrations/migrate-22-09.ts",
     "migrate-22-09:dry": "npx tsx --env-file=.env.local scripts/migrations/migrate-22-09.ts --dry-run",
-    "migrate-22-09:prod": "npx tsx --env-file=.env.production scripts/migrations/migrate-22-09.ts"
+    "migrate-22-09:prod": "npx tsx --env-file=.env.production scripts/migrations/migrate-22-09.ts",
+    "migrate-27-09": "npx tsx --env-file=.env.local scripts/migrations/migrate-27-09.ts",
+    "migrate-27-09:dry": "npx tsx --env-file=.env.local scripts/migrations/migrate-27-09.ts --dry-run",
+    "migrate-27-09:prod": "npx tsx --env-file=.env.production scripts/migrations/migrate-27-09.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.103.1",
